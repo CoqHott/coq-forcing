@@ -10,8 +10,7 @@ let force_tac obj hom c =
   Proofview.Goal.nf_enter begin fun gl ->
     let env = Proofview.Goal.env gl in
     let sigma = Proofview.Goal.sigma gl in
-    let concl = Proofview.Goal.concl gl in
-    let (sigma, ans) = FTranslate.translate env sigma cat concl in
+    let (sigma, ans) = FTranslate.translate env sigma cat c in
     Pp.msg_notice (Termops.print_constr ans);
     Proofview.tclUNIT ()
   end
