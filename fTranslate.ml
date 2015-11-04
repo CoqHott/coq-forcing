@@ -35,11 +35,14 @@ let trns cat a b c f g =
 (** Forcing translation *)
 
 type forcing_condition =
-  bool (** Is the forcing condition linked to a variable? *) *
-  Constr.t (** Level of the forcing condition *) *
-  Constr.t (** Morphism attached to the forcing condition *)
+| Variable
+| Lift
 
-type forcing_context = (bool * Constr.t * Constr.t) list
+type forcing_context = forcing_condition list
+(** Forcing contexts are flagging variables of the rel_context in the same
+    order. We statically know that variables coming from the introduction of
+    a forcing condition come by pairs: the first one is a level, the second one
+    a morphism. There is therefore only [Lift] condition for such pairs. *)
 
 let pos_name = Name (Id.of_string "p")
 let hom_name = Name (Id.of_string "α")
@@ -48,17 +51,31 @@ let dummy = mkProp
 
 (** We assume that there is a hidden topmost variable [p : Obj] in the context *)
 
-let rec morphism_var n ctx fctx = match ctx, fctx with
-| _ -> dummy
+let rec last_condition fctx = match fctx with
+| [] -> 1
+| Variable :: fctx -> 1 + last_condition fctx
+| Lift :: fctx -> 2
 
-let last_condition ctx fctx = match ctx, fctx with
-| _ -> 1
+let rec gather_morphisms i n fctx =
+  if n = 0 then []
+  else match fctx with
+  | [] -> []
+  | Variable :: fctx -> gather_morphisms (i + 1) (n - 1) fctx
+  | Lift :: fctx -> i :: gather_morphisms (i + 2) n fctx
+
+let morphism_var cat n fctx =
+  let morphs = gather_morphisms 1 n fctx in
+  let fold accu i =
+    trns cat dummy dummy (mkRel (i + 1)) accu (mkRel i)
+  in
+  let last = mkRel (last_condition fctx) in
+  List.fold_left fold (refl cat last) morphs
 
 let rec translate_aux env fctx sigma cat c = match kind_of_term c with
 | Rel n ->
   let ctx = Environ.rel_context env in
-  let p = mkRel (last_condition ctx fctx) in
-  let f = morphism_var n ctx fctx in
+  let p = mkRel (last_condition fctx) in
+  let f = morphism_var cat n fctx in
   let ans = mkApp (mkRel n, [| p; f |]) in
   (sigma, ans)
 | Var id -> assert false
@@ -66,21 +83,33 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
   let (sigma, s') = Evd.new_sort_variable Evd.univ_flexible sigma in
   let tpe' = mkArrow (hom cat (mkRel 3) (mkRel 1)) (mkSort s') in
   let tpe = mkProd (pos_name, cat.cat_obj, tpe') in
-  let lam = mkLambda (hom_name, hom cat dummy (mkRel 2), tpe) in
+  let last = 1 + last_condition fctx in
+  let lam = mkLambda (hom_name, hom cat (mkRel last) (mkRel 1), tpe) in
   (sigma, mkLambda (pos_name, cat.cat_obj, lam))
 | Cast (c, k, t) -> assert false
 | Prod (na, t, u) -> (sigma, dummy)
 | Lambda (na, t, u) ->
-  let (sigma, t_) = translate_aux env fctx sigma cat t in
+  (** Translation of t *)
+  let last = last_condition fctx in
+  let ext = [(hom_name, None, hom cat (mkRel (1 + last)) (mkRel 1)); (pos_name, None, cat.cat_obj)] in
+  let nenv = push_rel_context ext env in
+  let (sigma, t_) = translate_aux nenv (Lift :: fctx) sigma cat t in
+  let last = mkRel (last_condition (Lift :: fctx)) in
+  let t_ = mkApp (t_, [| last; refl cat last |]) in
+  let t_ = it_mkProd_or_LetIn t_ ext in
+  (** Translation of u *)
   let uenv = push_rel (na, None, t_) env in
-  let ufctx = (true, dummy, dummy) :: fctx in
+  let ufctx = Variable :: fctx in
   let (sigma, u_) = translate_aux uenv ufctx sigma cat u in
   let ans = mkLambda (na, t_, u_) in
   (sigma, ans)
 | LetIn (na, c, t, u) -> assert false
 | App (t, args) ->
   let (sigma, t_) = translate_aux env fctx sigma cat t in
-  let fold sigma u = (sigma, u) in
+  let fold sigma u =
+    let (sigma, u_) = translate_aux env fctx sigma cat u in
+    (sigma, u_)
+  in
   let (sigma, args_) = CList.fold_map fold sigma (Array.to_list args) in
   (sigma, mkApp (t_, Array.of_list args_))
 | Const pc -> assert false

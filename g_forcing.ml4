@@ -11,6 +11,7 @@ let force_tac obj hom c =
     let env = Proofview.Goal.env gl in
     let sigma = Proofview.Goal.sigma gl in
     let (sigma, ans) = FTranslate.translate env sigma cat c in
+    Pp.msg_notice (Termops.print_constr c);
     Pp.msg_notice (Termops.print_constr ans);
     Proofview.tclUNIT ()
   end
