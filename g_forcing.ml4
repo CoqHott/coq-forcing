@@ -12,7 +12,8 @@ let force_tac obj hom c =
     let sigma = Proofview.Goal.sigma gl in
     let concl = Proofview.Goal.concl gl in
     let (sigma, ans) = FTranslate.translate env sigma cat concl in
-    Proofview.Unsafe.tclEVARS sigma <*> Tactics.exact_check ans
+    Pp.msg_notice (Termops.print_constr ans);
+    Proofview.tclUNIT ()
   end
 
 TACTIC EXTEND force

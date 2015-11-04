@@ -20,12 +20,12 @@ let hom cat a b =
   mkProd (obj_name, cat.cat_obj, arr)
 
 let refl cat a =
-  let hom = hom cat (Vars.lift 1 a) (mkRel 1) in
+  let hom = mkApp (cat.cat_hom, [| Vars.lift 1 a; mkRel 1 |]) in
   let lam = mkLambda (knt_name, hom, mkRel 1) in
   mkLambda (obj_name, cat.cat_obj, lam)
 
 let trns cat a b c f g =
-  let hom = hom cat (Vars.lift 1 c) (mkRel 1) in
+  let hom = mkApp (cat.cat_hom, [| Vars.lift 1 c; mkRel 1 |]) in
   let app = mkApp (Vars.lift 2 g, [| mkRel 2; mkRel 1 |]) in
   let app' = mkApp (Vars.lift 2 f, [| mkRel 2; app |]) in
   let lam = mkLambda (knt_name, hom, app') in
