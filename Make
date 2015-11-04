@@ -1,3 +1,5 @@
+-R . Forcing
+-I .
 fTranslate.ml
 fTranslate.mli
 g_forcing.ml4

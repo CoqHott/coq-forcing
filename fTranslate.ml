@@ -60,4 +60,4 @@ let rec translate_aux env ctx fctx sigma cat c = match kind_of_term c with
 | Evar _ -> assert false
 
 let translate env sigma cat c =
-  assert false
+  (sigma, mkLambda (Anonymous, cat.cat_obj, refl cat (mkRel 1)))
