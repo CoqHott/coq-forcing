@@ -25,14 +25,22 @@ let refl cat a =
   mkLambda (obj_name, cat.cat_obj, lam)
 
 let trns cat a b c f g =
-  assert false
+  let hom = hom cat (Vars.lift 1 c) (mkRel 1) in
+  let app = mkApp (Vars.lift 2 g, [| mkRel 2; mkRel 1 |]) in
+  let app' = mkApp (Vars.lift 2 f, [| mkRel 2; app |]) in
+  let lam = mkLambda (knt_name, hom, app') in
+  mkLambda (obj_name, cat.cat_obj, lam)
 
 (** Forcing translation *)
 
-let translate env sigma cat c =
-  assert false
+type forcing_condition =
+  bool (** Is the forcing condition linked to a variable? *) *
+  Constr.t (** Level of the forcing condition *) *
+  Constr.t (** Morphism attached to the forcing condition *)
 
-let rec translate_aux env sigma cat c = match kind_of_term c with
+type forcing_context = (bool * Constr.t * Constr.t) list
+
+let rec translate_aux env ctx fctx sigma cat c = match kind_of_term c with
 | Rel n -> assert false
 | Var id -> assert false
 | Sort s -> assert false
@@ -50,3 +58,6 @@ let rec translate_aux env sigma cat c = match kind_of_term c with
 | Proj (p, c) -> assert false
 | Meta _ -> assert false
 | Evar _ -> assert false
+
+let translate env sigma cat c =
+  assert false
