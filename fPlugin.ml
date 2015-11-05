@@ -1,3 +1,4 @@
+open Pp
 open Names
 open Term
 open Decl_kinds
@@ -32,6 +33,7 @@ let force_solve cat c =
   end
 
 let force_translate (obj, hom) gr idopt =
+  let r = gr in
   let gr = Nametab.global gr in
   let obj = Universes.constr_of_global (Nametab.global obj) in
   let hom = Universes.constr_of_global (Nametab.global hom) in
@@ -60,4 +62,7 @@ let force_translate (obj, hom) gr idopt =
   let cd = Entries.DefinitionEntry const in
   let decl = (cd, IsProof Lemma) in
   let _ = Declare.declare_constant id decl in
+  let () = Pp.msg_info (str "Constant " ++ Libnames.pr_reference r ++
+    str " has been translated as " ++ Nameops.pr_id id ++ str ".")
+  in
   ()
