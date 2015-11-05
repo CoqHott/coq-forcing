@@ -95,7 +95,24 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
   let lam = mkLambda (hom_name, hom cat (mkRel last) (mkRel 1), tpe) in
   (sigma, mkLambda (pos_name, cat.cat_obj, lam))
 | Cast (c, k, t) -> assert false
-| Prod (na, t, u) -> (sigma, dummy)
+| Prod (na, t, u) ->
+  (** Translation of t *)
+  let last = last_condition fctx in
+  let ext = [(hom_name, None, hom cat (mkRel (1 + last)) (mkRel 1)); (pos_name, None, cat.cat_obj)] in
+  let nenv = push_rel_context ext env in
+  let (sigma, t_) = translate_aux nenv (Lift :: fctx) sigma cat t in
+  let last = mkRel (last_condition (Lift :: fctx)) in
+  let t_ = mkApp (t_, [| last; refl cat last |]) in
+  let t_ = it_mkProd_or_LetIn t_ ext in
+  (** Translation of u *)
+  let uenv = push_rel (na, None, t_) env in
+  let ufctx = Variable :: fctx in
+  let (sigma, u_) = translate_aux uenv ufctx sigma cat u in
+  (** Result *)
+  let ans = mkProd (na, t_, u_) in
+  let last = 1 + last_condition fctx in
+  let lam = mkLambda (hom_name, hom cat (mkRel last) (mkRel 1), ans) in
+  (sigma, mkLambda (pos_name, cat.cat_obj, lam))
 | Lambda (na, t, u) ->
   (** Translation of t *)
   let last = last_condition fctx in
