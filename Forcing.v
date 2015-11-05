@@ -12,4 +12,6 @@ Ltac _force c := force Obj Hom c.
 Goal True.
 Proof.
 _force (fun (A : Type) (x : A) => x).
+_force (fun (A : Type) (P : A -> Type) (x : A) => P x).
+_force (fun (A : Type) (x : A) (y : A) => forall (P : A -> Type), P x -> P y).
 Admitted.
