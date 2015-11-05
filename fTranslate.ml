@@ -106,11 +106,11 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
   (sigma, ans)
 | Var id -> assert false
 | Sort s ->
+  let (ext0, fctx) = extend cat fctx in
+  let (ext, fctx) = extend cat fctx in
   let (sigma, s') = Evd.new_sort_variable Evd.univ_flexible sigma in
-  let tpe' = mkArrow (hom cat (mkRel 3) (mkRel 1)) (mkSort s') in
-  let tpe = mkProd (pos_name, cat.cat_obj, tpe') in
-  let (ext, _) = extend cat fctx in
-  let lam = it_mkLambda_or_LetIn tpe ext in
+  let tpe = it_mkProd_or_LetIn (mkSort s') ext in
+  let lam = it_mkLambda_or_LetIn tpe ext0 in
   (sigma, lam)
 | Cast (c, k, t) -> assert false
 | Prod (na, t, u) ->

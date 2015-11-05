@@ -17,4 +17,3 @@ _force (fun (A : Type) (x : A) (y : A) => forall (P : A -> Type), P x -> P y).
 _force (forall A : Type, A -> A -> Type).
 _force ((fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A)).
 Admitted.
-
