@@ -7,6 +7,8 @@ type category = {
   (** Morphisms. Must be a closed term of type [cat_obj -> cat_obj -> Type]. *)
 }
 
+exception MissingGlobal of global_reference
+
 type translator = global_reference Refmap.t
 
 val translate : translator -> category ->

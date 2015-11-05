@@ -4,6 +4,7 @@ open Environ
 open Globnames
 
 type translator = global_reference Refmap.t
+exception MissingGlobal of global_reference
 
 (** Yoneda embedding *)
 
@@ -109,7 +110,10 @@ let add_variable fctx =
 
 let apply_global env sigma gr u fctx =
   (** FIXME *)
-  let p' = Refmap.find gr fctx.translator in
+  let p' =
+    try Refmap.find gr fctx.translator
+    with Not_found -> raise (MissingGlobal gr)
+  in
   let (sigma, c) = Evd.fresh_global env sigma p' in
   let last = last_condition fctx in
   (sigma, mkApp (c, [| mkRel last |]))

@@ -21,5 +21,7 @@ _force (fun (A B : Type) (x : A) (y : B) => forall (P : A -> B -> Type) (Q : B -
 Abort.
 
 Definition foo := fun A (x : A) => x.
+Definition bar := foo (forall A : Type, A).
 
 Forcing Translate foo using Obj Hom.
+Fail Forcing Translate bar using Obj Hom.

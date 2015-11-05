@@ -1,7 +1,9 @@
+open Errors
 open Pp
 open Names
 open Term
 open Decl_kinds
+open Globnames
 open Proofview.Notations
 
 (** Utilities *)
@@ -12,7 +14,7 @@ let translate_name id =
 
 (** Tactic *)
 
-let empty_translator = Globnames.Refmap.empty
+let empty_translator = Refmap.empty
 
 let force_tac cat c =
   Proofview.Goal.nf_enter begin fun gl ->
@@ -66,3 +68,12 @@ let force_translate (obj, hom) gr idopt =
     str " has been translated as " ++ Nameops.pr_id id ++ str ".")
   in
   ()
+
+(** Error handling *)
+
+let _ = register_handler begin function
+| FTranslate.MissingGlobal gr ->
+  let ref = Nametab.shortest_qualid_of_global Id.Set.empty gr in
+  str "No forcing translation for global " ++ Libnames.pr_qualid ref ++ str "."
+| _ -> raise Unhandled
+end
