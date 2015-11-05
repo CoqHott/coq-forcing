@@ -13,7 +13,9 @@ Goal True.
 Proof.
 _force (fun (A : Type) (x : A) => x).
 _force (fun (A : Type) (P : forall x : A, Type) (x : A) => P x).
+_force (forall A : Type, (A -> Type) -> A -> Type).
 _force (fun (A : Type) (x : A) (y : A) => forall (P : A -> Type), P x -> P y).
 _force (forall A : Type, A -> A -> Type).
 _force ((fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A)).
-Admitted.
+_force (fun (A B : Type) (x : A) (y : B) => forall (P : A -> B -> Type) (Q : B -> Type), P x y -> Q y).
+Abort.
