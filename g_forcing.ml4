@@ -14,7 +14,7 @@ let force_tac obj hom c =
     Pp.msg_notice (Termops.print_constr c);
     Pp.msg_notice (Termops.print_constr ans);
     Proofview.Unsafe.tclEVARS sigma <*>
-    Tactics.pose_proof Names.Name.Anonymous ans
+    Tactics.letin_tac None Names.Name.Anonymous ans None Locusops.allHyps
   end
 
 TACTIC EXTEND force
