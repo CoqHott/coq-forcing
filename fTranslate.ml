@@ -44,6 +44,7 @@ type forcing_context = {
     order. We statically know that variables coming from the introduction of
     a forcing condition come by pairs: the first one is a level, the second one
     a morphism. There is therefore only [Lift] condition for such pairs. *)
+  category : category;
 }
 
 let pos_name = Name (Id.of_string "p")
@@ -71,13 +72,13 @@ let gather_morphisms n fctx =
   in
   gather 1 n fctx.context
 
-let morphism_var cat n fctx =
+let morphism_var n fctx =
   let morphs = gather_morphisms n fctx in
   let fold accu i =
-    trns cat dummy dummy (mkRel (i + 1)) (mkRel i) accu
+    trns fctx.category dummy dummy (mkRel (i + 1)) (mkRel i) accu
   in
   let last = mkRel (last_condition fctx) in
-  List.fold_left fold (refl cat last) morphs
+  List.fold_left fold (refl fctx.category last) morphs
 
 let get_var_shift n fctx =
   let rec get n fctx =
@@ -89,59 +90,60 @@ let get_var_shift n fctx =
   in
   get n fctx.context
 
-let extend cat fctx =
+let extend fctx =
+  let cat = fctx.category in
   let last = last_condition fctx in
   let ext = [(hom_name, None, hom cat (mkRel (1 + last)) (mkRel 1)); (pos_name, None, cat.cat_obj)] in
-  (ext, { context = Lift :: fctx.context })
+  (ext, { fctx with context = Lift :: fctx.context })
 
-let add_variable cat fctx =
-  { context = Variable :: fctx.context }
+let add_variable fctx =
+  { fctx with context = Variable :: fctx.context }
 
-let rec translate_aux env fctx sigma cat c = match kind_of_term c with
+let rec translate_aux env fctx sigma c = match kind_of_term c with
 | Rel n ->
   let p = mkRel (last_condition fctx) in
-  let f = morphism_var cat n fctx in
+  let f = morphism_var n fctx in
   let m = get_var_shift n fctx in
   let ans = mkApp (mkRel m, [| p; f |]) in
   (sigma, ans)
 | Var id -> assert false
 | Sort s ->
-  let (ext0, fctx) = extend cat fctx in
-  let (ext, fctx) = extend cat fctx in
+  let (ext0, fctx) = extend fctx in
+  let (ext, fctx) = extend fctx in
   let (sigma, s') = Evd.new_sort_variable Evd.univ_flexible sigma in
   let tpe = it_mkProd_or_LetIn (mkSort s') ext in
   let lam = it_mkLambda_or_LetIn tpe ext0 in
   (sigma, lam)
 | Cast (c, k, t) -> assert false
 | Prod (na, t, u) ->
-  let (ext0, fctx) = extend cat fctx in
+  let (ext0, fctx) = extend fctx in
   (** Translation of t *)
-  let (ext, tfctx) = extend cat fctx in
-  let (sigma, t_) = translate_type env tfctx sigma cat t in
+  let (ext, tfctx) = extend fctx in
+  let (sigma, t_) = translate_type env tfctx sigma t in
   let t_ = it_mkProd_or_LetIn t_ ext in
   (** Translation of u *)
-  let ufctx = add_variable cat fctx in
-  let (sigma, u_) = translate_type env ufctx sigma cat u in
+  let ufctx = add_variable fctx in
+  let (sigma, u_) = translate_type env ufctx sigma u in
   (** Result *)
   let ans = mkProd (na, t_, u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
   (sigma, lam)
 | Lambda (na, t, u) ->
   (** Translation of t *)
-  let (ext, tfctx) = extend cat fctx in
-  let (sigma, t_) = translate_type env tfctx sigma cat t in
+  let (ext, tfctx) = extend fctx in
+  let (sigma, t_) = translate_type env tfctx sigma t in
   let t_ = it_mkProd_or_LetIn t_ ext in
   (** Translation of u *)
-  let ufctx = add_variable cat fctx in
-  let (sigma, u_) = translate_aux env ufctx sigma cat u in
+  let ufctx = add_variable fctx in
+  let (sigma, u_) = translate_aux env ufctx sigma u in
   let ans = mkLambda (na, t_, u_) in
   (sigma, ans)
 | LetIn (na, c, t, u) -> assert false
 | App (t, args) ->
-  let (sigma, t_) = translate_aux env fctx sigma cat t in
-  let (ext, ufctx) = extend cat fctx in
+  let (sigma, t_) = translate_aux env fctx sigma t in
+  let (ext, ufctx) = extend fctx in
   let fold sigma u =
-    let (sigma, u_) = translate_aux env ufctx sigma cat u in
+    let (sigma, u_) = translate_aux env ufctx sigma u in
     let u_ = it_mkLambda_or_LetIn u_ ext in
     (sigma, u_)
   in
@@ -157,14 +159,14 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
 | Meta _ -> assert false
 | Evar _ -> assert false
 
-and translate_type env fctx sigma cat t =
-  let (sigma, t_) = translate_aux env fctx sigma cat t in
+and translate_type env fctx sigma t =
+  let (sigma, t_) = translate_aux env fctx sigma t in
   let last = mkRel (last_condition fctx) in
-  let t_ = mkApp (t_, [| last; refl cat last |]) in
+  let t_ = mkApp (t_, [| last; refl fctx.category last |]) in
   (sigma, t_)
 
 
 let translate env sigma cat c =
-  let empty = { context = [] } in
-  let (sigma, c) = translate_aux env empty sigma cat c in
+  let empty = { context = []; category = cat; } in
+  let (sigma, c) = translate_aux env empty sigma c in
   (sigma, mkLambda (pos_name, cat.cat_obj, c))
