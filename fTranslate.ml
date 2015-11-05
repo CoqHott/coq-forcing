@@ -131,7 +131,7 @@ let rec translate_aux env fctx sigma c = match kind_of_term c with
 | Sort s ->
   let (ext0, fctx) = extend fctx in
   let (ext, fctx) = extend fctx in
-  let (sigma, s') = Evd.new_sort_variable Evd.univ_flexible sigma in
+  let (sigma, s') = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
   let tpe = it_mkProd_or_LetIn (mkSort s') ext in
   let lam = it_mkLambda_or_LetIn tpe ext0 in
   (sigma, lam)

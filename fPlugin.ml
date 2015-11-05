@@ -46,7 +46,7 @@ let force_tac cat c =
   Proofview.Goal.nf_enter begin fun gl ->
     let env = Proofview.Goal.env gl in
     let sigma = Proofview.Goal.sigma gl in
-    let (sigma, ans) = FTranslate.translate empty_translator cat env sigma c in
+    let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
     Proofview.Unsafe.tclEVARS sigma <*>
     Tactics.letin_tac None Names.Name.Anonymous ans None Locusops.allHyps
   end
@@ -56,8 +56,9 @@ let force_solve cat c =
     let env = Proofview.Goal.env gl in
     let sigma = Proofview.Goal.sigma gl in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
+    msg_info (Termops.print_constr ans);
     Proofview.Unsafe.tclEVARS sigma <*>
-    Tactics.exact_check ans
+    Proofview.Refine.refine_casted begin fun h -> (h, ans) end
   end
 
 let force_translate (obj, hom) gr idopt =
