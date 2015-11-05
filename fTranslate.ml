@@ -114,8 +114,12 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
 | LetIn (na, c, t, u) -> assert false
 | App (t, args) ->
   let (sigma, t_) = translate_aux env fctx sigma cat t in
+  let last = last_condition fctx in
+  let ext = [(hom_name, None, hom cat (mkRel (1 + last)) (mkRel 1)); (pos_name, None, cat.cat_obj)] in
+  let nenv = push_rel_context ext env in
   let fold sigma u =
-    let (sigma, u_) = translate_aux env fctx sigma cat u in
+    let (sigma, u_) = translate_aux nenv (Lift :: fctx) sigma cat u in
+    let u_ = it_mkProd_or_LetIn u_ ext in
     (sigma, u_)
   in
   let (sigma, args_) = CList.fold_map fold sigma (Array.to_list args) in
