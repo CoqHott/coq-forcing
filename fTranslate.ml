@@ -66,7 +66,7 @@ let rec gather_morphisms i n fctx =
 let morphism_var cat n fctx =
   let morphs = gather_morphisms 1 n fctx in
   let fold accu i =
-    trns cat dummy dummy (mkRel (i + 1)) accu (mkRel i)
+    trns cat dummy dummy (mkRel (i + 1)) (mkRel i) accu
   in
   let last = mkRel (last_condition fctx) in
   List.fold_left fold (refl cat last) morphs
@@ -77,6 +77,11 @@ let rec get_var_shift n fctx =
   | [] -> n
   | Variable :: fctx -> 1 + get_var_shift (n - 1) fctx
   | Lift :: fctx -> 2 + get_var_shift n fctx
+
+let extend cat fctx =
+  let last = last_condition fctx in
+  [(hom_name, None, hom cat (mkRel (1 + last)) (mkRel 1)); (pos_name, None, cat.cat_obj)]
+
 
 let rec translate_aux env fctx sigma cat c = match kind_of_term c with
 | Rel n ->
@@ -91,16 +96,15 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
   let (sigma, s') = Evd.new_sort_variable Evd.univ_flexible sigma in
   let tpe' = mkArrow (hom cat (mkRel 3) (mkRel 1)) (mkSort s') in
   let tpe = mkProd (pos_name, cat.cat_obj, tpe') in
-  let last = 1 + last_condition fctx in
-  let lam = mkLambda (hom_name, hom cat (mkRel last) (mkRel 1), tpe) in
-  (sigma, mkLambda (pos_name, cat.cat_obj, lam))
+  let ext = extend cat fctx in
+  let lam = it_mkLambda_or_LetIn tpe ext in
+  (sigma, lam)
 | Cast (c, k, t) -> assert false
 | Prod (na, t, u) ->
   (** Translation of t *)
-  let last = last_condition fctx in
-  let ext = [(hom_name, None, hom cat (mkRel (1 + last)) (mkRel 1)); (pos_name, None, cat.cat_obj)] in
+  let ext = extend cat fctx in
   let nenv = push_rel_context ext env in
-  let (sigma, t_) = translate_aux nenv (Lift :: fctx) sigma cat t in
+  let (sigma, t_) = translate_aux nenv (Lift :: Lift :: fctx) sigma cat t in
   let last = mkRel (last_condition (Lift :: fctx)) in
   let t_ = mkApp (t_, [| last; refl cat last |]) in
   let t_ = it_mkProd_or_LetIn t_ ext in
@@ -110,13 +114,12 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
   let (sigma, u_) = translate_aux uenv ufctx sigma cat u in
   (** Result *)
   let ans = mkProd (na, t_, u_) in
-  let last = 1 + last_condition fctx in
-  let lam = mkLambda (hom_name, hom cat (mkRel last) (mkRel 1), ans) in
-  (sigma, mkLambda (pos_name, cat.cat_obj, lam))
+  let ext = extend cat fctx in
+  let lam = it_mkLambda_or_LetIn ans ext in
+  (sigma, lam)
 | Lambda (na, t, u) ->
   (** Translation of t *)
-  let last = last_condition fctx in
-  let ext = [(hom_name, None, hom cat (mkRel (1 + last)) (mkRel 1)); (pos_name, None, cat.cat_obj)] in
+  let ext = extend cat fctx in
   let nenv = push_rel_context ext env in
   let (sigma, t_) = translate_aux nenv (Lift :: fctx) sigma cat t in
   let last = mkRel (last_condition (Lift :: fctx)) in
@@ -131,8 +134,7 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
 | LetIn (na, c, t, u) -> assert false
 | App (t, args) ->
   let (sigma, t_) = translate_aux env fctx sigma cat t in
-  let last = last_condition fctx in
-  let ext = [(hom_name, None, hom cat (mkRel (1 + last)) (mkRel 1)); (pos_name, None, cat.cat_obj)] in
+  let ext = extend cat fctx in
   let nenv = push_rel_context ext env in
   let fold sigma u =
     let (sigma, u_) = translate_aux nenv (Lift :: fctx) sigma cat u in
