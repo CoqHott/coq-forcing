@@ -85,7 +85,6 @@ let extend cat fctx =
 
 let rec translate_aux env fctx sigma cat c = match kind_of_term c with
 | Rel n ->
-  let ctx = Environ.rel_context env in
   let p = mkRel (last_condition fctx) in
   let f = morphism_var cat n fctx in
   let m = get_var_shift n fctx in
@@ -102,16 +101,18 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
 | Cast (c, k, t) -> assert false
 | Prod (na, t, u) ->
   (** Translation of t *)
-  let ext = extend cat fctx in
+  let ext = extend cat (Lift :: fctx) in
   let nenv = push_rel_context ext env in
   let (sigma, t_) = translate_aux nenv (Lift :: Lift :: fctx) sigma cat t in
-  let last = mkRel (last_condition (Lift :: fctx)) in
+  let last = mkRel (last_condition (Lift :: Lift :: fctx)) in
   let t_ = mkApp (t_, [| last; refl cat last |]) in
   let t_ = it_mkProd_or_LetIn t_ ext in
   (** Translation of u *)
   let uenv = push_rel (na, None, t_) env in
-  let ufctx = Variable :: fctx in
+  let ufctx = Variable :: Lift :: fctx in
   let (sigma, u_) = translate_aux uenv ufctx sigma cat u in
+  let last = mkRel (last_condition ufctx) in
+  let u_ = mkApp (u_, [| last; refl cat last |]) in
   (** Result *)
   let ans = mkProd (na, t_, u_) in
   let ext = extend cat fctx in
@@ -138,7 +139,7 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
   let nenv = push_rel_context ext env in
   let fold sigma u =
     let (sigma, u_) = translate_aux nenv (Lift :: fctx) sigma cat u in
-    let u_ = it_mkProd_or_LetIn u_ ext in
+    let u_ = it_mkLambda_or_LetIn u_ ext in
     (sigma, u_)
   in
   let (sigma, args_) = CList.fold_map fold sigma (Array.to_list args) in
