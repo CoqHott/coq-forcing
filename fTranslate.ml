@@ -188,3 +188,8 @@ let translate translator cat env sigma c =
   let (sigma, c) = translate_aux env empty sigma c in
   (sigma, mkLambda (pos_name, cat.cat_obj, c))
 
+let translate_type translator cat env sigma c =
+  let empty = { context = []; category = cat; translator; } in
+  let (sigma, c) = translate_aux env empty sigma c in
+  let c = mkApp (c, [| mkRel 1; refl cat (mkRel 1) |]) in
+  (sigma, mkProd (pos_name, cat.cat_obj, c))
