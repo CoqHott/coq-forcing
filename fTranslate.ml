@@ -1,6 +1,11 @@
 open Names
 open Term
 open Environ
+open Globnames
+
+type translator = global_reference Refmap.t
+
+(** Yoneda embedding *)
 
 type category = {
   cat_obj : Constr.t;
@@ -8,8 +13,6 @@ type category = {
   cat_hom : Constr.t;
   (** Morphisms. Must be of type [cat_obj -> cat_obj -> Type]. *)
 }
-
-(** Yoneda embedding *)
 
 let obj_name = Name (Id.of_string "R")
 let knt_name = Name (Id.of_string "k")
@@ -45,14 +48,17 @@ type forcing_context = {
     a forcing condition come by pairs: the first one is a level, the second one
     a morphism. There is therefore only [Lift] condition for such pairs. *)
   category : category;
+  (** Underlying category *)
+  translator : translator;
+  (** A map associating to all source constant a forced constant *)
 }
+
+(** We assume that there is a hidden topmost variable [p : Obj] in the context *)
 
 let pos_name = Name (Id.of_string "p")
 let hom_name = Name (Id.of_string "α")
 
 let dummy = mkProp
-
-(** We assume that there is a hidden topmost variable [p : Obj] in the context *)
 
 let last_condition fctx =
   let rec last fctx = match fctx with
@@ -98,6 +104,17 @@ let extend fctx =
 
 let add_variable fctx =
   { fctx with context = Variable :: fctx.context }
+
+(** Handling of globals *)
+
+let apply_global env sigma gr u fctx =
+  (** FIXME *)
+  let p' = Refmap.find gr fctx.translator in
+  let (sigma, c) = Evd.fresh_global env sigma p' in
+  let last = last_condition fctx in
+  (sigma, mkApp (c, [| mkRel last |]))
+
+(** Forcing translation core *)
 
 let rec translate_aux env fctx sigma c = match kind_of_term c with
 | Rel n ->
@@ -149,7 +166,8 @@ let rec translate_aux env fctx sigma c = match kind_of_term c with
   in
   let (sigma, args_) = CList.fold_map fold sigma (Array.to_list args) in
   (sigma, mkApp (t_, Array.of_list args_))
-| Const pc -> assert false
+| Const (p, u) ->
+  apply_global env sigma (ConstRef p) u fctx
 | Ind pi -> assert false
 | Construct pc -> assert false
 | Case (ci, c, r, p) -> assert false
@@ -165,8 +183,8 @@ and translate_type env fctx sigma t =
   let t_ = mkApp (t_, [| last; refl fctx.category last |]) in
   (sigma, t_)
 
-
-let translate env sigma cat c =
-  let empty = { context = []; category = cat; } in
+let translate translator cat env sigma c =
+  let empty = { context = []; category = cat; translator; } in
   let (sigma, c) = translate_aux env empty sigma c in
   (sigma, mkLambda (pos_name, cat.cat_obj, c))
+
