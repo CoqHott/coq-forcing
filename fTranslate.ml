@@ -117,15 +117,11 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
   let (ext0, fctx) = extend cat fctx in
   (** Translation of t *)
   let (ext, tfctx) = extend cat fctx in
-  let (sigma, t_) = translate_aux env tfctx sigma cat t in
-  let last = mkRel (last_condition tfctx) in
-  let t_ = mkApp (t_, [| last; refl cat last |]) in
+  let (sigma, t_) = translate_type env tfctx sigma cat t in
   let t_ = it_mkProd_or_LetIn t_ ext in
   (** Translation of u *)
   let ufctx = add_variable cat fctx in
-  let (sigma, u_) = translate_aux env ufctx sigma cat u in
-  let last = mkRel (last_condition ufctx) in
-  let u_ = mkApp (u_, [| last; refl cat last |]) in
+  let (sigma, u_) = translate_type env ufctx sigma cat u in
   (** Result *)
   let ans = mkProd (na, t_, u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
@@ -133,9 +129,7 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
 | Lambda (na, t, u) ->
   (** Translation of t *)
   let (ext, tfctx) = extend cat fctx in
-  let (sigma, t_) = translate_aux env tfctx sigma cat t in
-  let last = mkRel (last_condition tfctx) in
-  let t_ = mkApp (t_, [| last; refl cat last |]) in
+  let (sigma, t_) = translate_type env tfctx sigma cat t in
   let t_ = it_mkProd_or_LetIn t_ ext in
   (** Translation of u *)
   let ufctx = add_variable cat fctx in
@@ -162,6 +156,13 @@ let rec translate_aux env fctx sigma cat c = match kind_of_term c with
 | Proj (p, c) -> assert false
 | Meta _ -> assert false
 | Evar _ -> assert false
+
+and translate_type env fctx sigma cat t =
+  let (sigma, t_) = translate_aux env fctx sigma cat t in
+  let last = mkRel (last_condition fctx) in
+  let t_ = mkApp (t_, [| last; refl cat last |]) in
+  (sigma, t_)
+
 
 let translate env sigma cat c =
   let empty = { context = [] } in
