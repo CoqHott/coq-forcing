@@ -13,7 +13,8 @@ let force_tac obj hom c =
     let (sigma, ans) = FTranslate.translate env sigma cat c in
     Pp.msg_notice (Termops.print_constr c);
     Pp.msg_notice (Termops.print_constr ans);
-    Proofview.tclUNIT ()
+    Proofview.Unsafe.tclEVARS sigma <*>
+    Tactics.pose_proof Names.Name.Anonymous ans
   end
 
 TACTIC EXTEND force
