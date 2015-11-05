@@ -71,12 +71,20 @@ let morphism_var cat n fctx =
   let last = mkRel (last_condition fctx) in
   List.fold_left fold (refl cat last) morphs
 
+let rec get_var_shift n fctx =
+  if n = 0 then 0
+  else match fctx with
+  | [] -> n
+  | Variable :: fctx -> 1 + get_var_shift (n - 1) fctx
+  | Lift :: fctx -> 2 + get_var_shift n fctx
+
 let rec translate_aux env fctx sigma cat c = match kind_of_term c with
 | Rel n ->
   let ctx = Environ.rel_context env in
   let p = mkRel (last_condition fctx) in
   let f = morphism_var cat n fctx in
-  let ans = mkApp (mkRel n, [| p; f |]) in
+  let m = get_var_shift n fctx in
+  let ans = mkApp (mkRel m, [| p; f |]) in
   (sigma, ans)
 | Var id -> assert false
 | Sort s ->
