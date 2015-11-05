@@ -74,10 +74,10 @@ let gather_morphisms n fctx =
 
 let morphism_var n fctx =
   let morphs = gather_morphisms n fctx in
-  let fold accu i =
-    trns fctx.category dummy dummy (mkRel (i + 1)) (mkRel i) accu
-  in
   let last = mkRel (last_condition fctx) in
+  let fold accu i =
+    trns fctx.category dummy dummy last (mkRel i) accu
+  in
   List.fold_left fold (refl fctx.category last) morphs
 
 let get_var_shift n fctx =
