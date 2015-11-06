@@ -73,15 +73,23 @@ let force_translate_constant cat cst id uctx typ =
   ConstRef cst
 
 let force_translate_inductive cat ind =
+  (** From a kernel inductive body construct an entry for the inductive. There
+      are slight mismatches in the representation, in particular in the handling
+      of contexts. See {!Declarations} and {!Entries}. *)
   let open Declarations in
   let open Entries in
   let env = Global.env () in
   let (mib, _) = Global.lookup_inductive ind in
-  let make_one_entry (sigma, bodies_) body =
+  (** For each block in the inductive we build the translation *)
+  let make_one_entry body (sigma, bodies_) =
     let arity = match body.mind_arity with
     | RegularArity _ -> false
     | TemplateArity _ -> true
     in
+    let fold_lc typ (sigma, lc_) =
+      (sigma, typ :: lc_)
+    in
+    let (sigma, lc_) = Array.fold_right fold_lc body.mind_user_lc (sigma, []) in
     let body_ = {
       mind_entry_typename = translate_name body.mind_typename;
       mind_entry_arity = assert false;
@@ -91,6 +99,7 @@ let force_translate_inductive cat ind =
     } in
     (sigma, body_ :: bodies_)
   in
+  (** We proceed to the whole mutual block *)
   let record = match mib.mind_record with
   | None -> None
   | Some None -> Some None
@@ -98,7 +107,7 @@ let force_translate_inductive cat ind =
   in
   let sigma = Evd.empty in
   let (sigma, params_) = FTranslate.translate_context !translator cat env sigma mib.mind_params_ctxt in
-  let (sigma, bodies_) = Array.fold_left make_one_entry (sigma, []) mib.mind_packets in
+  let (sigma, bodies_) = Array.fold_right make_one_entry mib.mind_packets (sigma, []) in
   let make_param = function
   | (na, None, t) -> (Nameops.out_name na, LocalAssum t)
   | (na, Some body, _) -> (Nameops.out_name na, LocalDef body)
