@@ -120,7 +120,7 @@ let apply_global env sigma gr u fctx =
 
 (** Forcing translation core *)
 
-let rec translate_aux env fctx sigma c = match kind_of_term c with
+let rec otranslate env fctx sigma c = match kind_of_term c with
 | Rel n ->
   let p = mkRel (last_condition fctx) in
   let f = morphism_var n fctx in
@@ -135,19 +135,19 @@ let rec translate_aux env fctx sigma c = match kind_of_term c with
   let lam = it_mkLambda_or_LetIn tpe ext0 in
   (sigma, lam)
 | Cast (c, k, t) ->
-  let (sigma, c_) = translate_aux env fctx sigma c in
-  let (sigma, t_) = translate_type env fctx sigma t in
+  let (sigma, c_) = otranslate env fctx sigma c in
+  let (sigma, t_) = otranslate_type env fctx sigma t in
   let ans = mkCast (c_, k, t_) in
   (sigma, ans)
 | Prod (na, t, u) ->
   let (ext0, fctx) = extend fctx in
   (** Translation of t *)
   let (ext, tfctx) = extend fctx in
-  let (sigma, t_) = translate_type env tfctx sigma t in
+  let (sigma, t_) = otranslate_type env tfctx sigma t in
   let t_ = it_mkProd_or_LetIn t_ ext in
   (** Translation of u *)
   let ufctx = add_variable fctx in
-  let (sigma, u_) = translate_type env ufctx sigma u in
+  let (sigma, u_) = otranslate_type env ufctx sigma u in
   (** Result *)
   let ans = mkProd (na, t_, u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
@@ -155,19 +155,19 @@ let rec translate_aux env fctx sigma c = match kind_of_term c with
 | Lambda (na, t, u) ->
   (** Translation of t *)
   let (ext, tfctx) = extend fctx in
-  let (sigma, t_) = translate_type env tfctx sigma t in
+  let (sigma, t_) = otranslate_type env tfctx sigma t in
   let t_ = it_mkProd_or_LetIn t_ ext in
   (** Translation of u *)
   let ufctx = add_variable fctx in
-  let (sigma, u_) = translate_aux env ufctx sigma u in
+  let (sigma, u_) = otranslate env ufctx sigma u in
   let ans = mkLambda (na, t_, u_) in
   (sigma, ans)
 | LetIn (na, c, t, u) -> assert false
 | App (t, args) ->
-  let (sigma, t_) = translate_aux env fctx sigma t in
+  let (sigma, t_) = otranslate env fctx sigma t in
   let (ext, ufctx) = extend fctx in
   let fold sigma u =
-    let (sigma, u_) = translate_aux env ufctx sigma u in
+    let (sigma, u_) = otranslate env ufctx sigma u in
     let u_ = it_mkLambda_or_LetIn u_ ext in
     (sigma, u_)
   in
@@ -188,16 +188,22 @@ let rec translate_aux env fctx sigma c = match kind_of_term c with
 | Meta _ -> assert false
 | Evar _ -> assert false
 
-and translate_type env fctx sigma t =
-  let (sigma, t_) = translate_aux env fctx sigma t in
+and otranslate_type env fctx sigma t =
+  let (sigma, t_) = otranslate env fctx sigma t in
   let last = mkRel (last_condition fctx) in
   let t_ = mkApp (t_, [| last; refl fctx.category last |]) in
   (sigma, t_)
 
 let translate translator cat env sigma c =
   let empty = { context = []; category = cat; translator; } in
-  let (sigma, c) = translate_aux env empty sigma c in
+  let (sigma, c) = otranslate env empty sigma c in
   (sigma, mkLambda (pos_name, cat.cat_obj, c))
+
+let translate_type translator cat env sigma c =
+  let empty = { context = []; category = cat; translator; } in
+  let (sigma, c) = otranslate env empty sigma c in
+  let c = mkApp (c, [| mkRel 1; refl cat (mkRel 1) |]) in
+  (sigma, mkProd (pos_name, cat.cat_obj, c))
 
 let translate_context translator cat env sigma ctx =
   let empty = { context = []; category = cat; translator; } in
@@ -207,7 +213,7 @@ let translate_context translator cat env sigma ctx =
     | Some _ -> assert false
     in
     let (ext, tfctx) = extend fctx in
-    let (sigma, t_) = translate_type env tfctx sigma t in
+    let (sigma, t_) = otranslate_type env tfctx sigma t in
     let t_ = it_mkProd_or_LetIn t_ ext in
     let decl_ = (na, body_, t_) in
     let fctx = add_variable fctx in
@@ -216,9 +222,3 @@ let translate_context translator cat env sigma ctx =
   let init = [obj_name, None, cat.cat_obj] in
   let (sigma, _, ctx_) = List.fold_right fold ctx (sigma, empty, init) in
   (sigma, ctx_)
-
-let translate_type translator cat env sigma c =
-  let empty = { context = []; category = cat; translator; } in
-  let (sigma, c) = translate_aux env empty sigma c in
-  let c = mkApp (c, [| mkRel 1; refl cat (mkRel 1) |]) in
-  (sigma, mkProd (pos_name, cat.cat_obj, c))
