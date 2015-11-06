@@ -127,7 +127,6 @@ let rec translate_aux env fctx sigma c = match kind_of_term c with
   let m = get_var_shift n fctx in
   let ans = mkApp (mkRel m, [| p; f |]) in
   (sigma, ans)
-| Var id -> assert false
 | Sort s ->
   let (ext0, fctx) = extend fctx in
   let (ext, fctx) = extend fctx in
@@ -174,10 +173,14 @@ let rec translate_aux env fctx sigma c = match kind_of_term c with
   in
   let (sigma, args_) = CList.fold_map fold sigma (Array.to_list args) in
   (sigma, mkApp (t_, Array.of_list args_))
+| Var id ->
+  apply_global env sigma (VarRef id) Univ.Instance.empty fctx
 | Const (p, u) ->
   apply_global env sigma (ConstRef p) u fctx
-| Ind pi -> assert false
-| Construct pc -> assert false
+| Ind (i, u) ->
+  apply_global env sigma (IndRef i) u fctx
+| Construct (c, u) ->
+  apply_global env sigma (ConstructRef c) u fctx
 | Case (ci, c, r, p) -> assert false
 | Fix f -> assert false
 | CoFix f -> assert false
