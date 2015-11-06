@@ -1,5 +1,6 @@
 open Errors
 open Pp
+open Util
 open Names
 open Term
 open Decl_kinds
@@ -71,6 +72,33 @@ let force_translate_constant cat cst id uctx typ =
   let cst = Declare.declare_constant id decl in
   ConstRef cst
 
+let force_translate_inductive cat ind =
+  let open Declarations in
+  let open Entries in
+  let (mib, _) = Global.lookup_inductive ind in
+  let make_one_entry body =
+    {
+      mind_entry_typename = translate_name body.mind_typename;
+      mind_entry_arity = assert false;
+      mind_entry_template = assert false;
+      mind_entry_consnames = CArray.map_to_list translate_name body.mind_consnames;
+      mind_entry_lc = Array.to_list body.mind_user_lc;
+    }
+  in
+  let mib_ = {
+    mind_entry_record = Option.map (fun b -> Option.map pi1 b) mib.mind_record;
+    mind_entry_finite = mib.mind_finite;
+    mind_entry_params = assert false;
+    mind_entry_inds = CArray.map_to_list make_one_entry mib.mind_packets;
+    mind_entry_polymorphic = mib.mind_polymorphic;
+    (** FIXME *)
+    mind_entry_universes = Univ.UContext.empty;
+    mind_entry_private = mib.mind_private;
+  } in
+  let (_, kn), _ = Declare.declare_mind mib_ in
+  let mib_ = Global.mind_of_delta_kn kn in
+  IndRef (mib_, snd ind)
+
 let force_translate (obj, hom) gr idopt =
   let r = gr in
   let gr = Nametab.global gr in
@@ -93,6 +121,7 @@ let force_translate (obj, hom) gr idopt =
   in
   let ans = match gr with
   | ConstRef cst -> force_translate_constant cat cst id uctx typ
+  | IndRef ind -> force_translate_inductive cat ind
   | _ -> error "Translation not handled."
   in
   let () = Lib.add_anonymous_leaf (in_translator [gr, ans]) in
