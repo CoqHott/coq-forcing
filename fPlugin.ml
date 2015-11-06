@@ -61,6 +61,16 @@ let force_solve cat c =
     Proofview.Refine.refine_casted begin fun h -> (h, ans) end
   end
 
+let force_translate_constant cat cst id uctx typ =
+  let body = Option.get (Global.body_of_constant cst) in
+  let tac = force_solve cat body in
+  let sign = Environ.empty_named_context_val in
+  let (const, safe, uctx) = Pfedit.build_constant_by_tactic id uctx sign typ tac in
+  let cd = Entries.DefinitionEntry const in
+  let decl = (cd, IsProof Lemma) in
+  let cst = Declare.declare_constant id decl in
+  ConstRef cst
+
 let force_translate (obj, hom) gr idopt =
   let r = gr in
   let gr = Nametab.global gr in
@@ -81,18 +91,12 @@ let force_translate (obj, hom) gr idopt =
   | None -> translate_name (Nametab.basename_of_global gr)
   | Some id -> id
   in
-  let body = match gr with
-  | ConstRef cst -> Option.get (Global.body_of_constant cst)
-  | _ -> assert false
+  let ans = match gr with
+  | ConstRef cst -> force_translate_constant cat cst id uctx typ
+  | _ -> error "Translation not handled."
   in
-  let tac = force_solve cat body in
-  let sign = Environ.empty_named_context_val in
-  let (const, safe, uctx) = Pfedit.build_constant_by_tactic id uctx sign typ tac in
-  let cd = Entries.DefinitionEntry const in
-  let decl = (cd, IsProof Lemma) in
-  let cst = Declare.declare_constant id decl in
-  let () = Lib.add_anonymous_leaf (in_translator [gr, ConstRef cst]) in
-  let () = Pp.msg_info (str "Constant " ++ Libnames.pr_reference r ++
+  let () = Lib.add_anonymous_leaf (in_translator [gr, ans]) in
+  let () = Pp.msg_info (str "Global " ++ Libnames.pr_reference r ++
     str " has been translated as " ++ Nameops.pr_id id ++ str ".")
   in
   ()
