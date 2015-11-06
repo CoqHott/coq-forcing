@@ -194,19 +194,28 @@ and otranslate_type env fctx sigma t =
   let t_ = mkApp (t_, [| last; refl fctx.category last |]) in
   (sigma, t_)
 
-let translate translator cat env sigma c =
+let empty translator cat env =
+  let ctx = rel_context env in
   let empty = { context = []; category = cat; translator; } in
-  let (sigma, c) = otranslate env empty sigma c in
-  (sigma, mkLambda (pos_name, cat.cat_obj, c))
+  List.fold_right (fun _ fctx -> add_variable fctx) ctx empty
 
-let translate_type translator cat env sigma c =
-  let empty = { context = []; category = cat; translator; } in
+(** The toplevel option allows to close over the topmost forcing condition *)
+
+let translate ?(toplevel = true) translator cat env sigma c =
+  let empty = empty translator cat env in
+  let (sigma, c) = otranslate env empty sigma c in
+  let ans = if toplevel then mkLambda (pos_name, cat.cat_obj, c) else c in
+  (sigma, ans)
+
+let translate_type ?(toplevel = true) translator cat env sigma c =
+  let empty = empty translator cat env in
   let (sigma, c) = otranslate env empty sigma c in
   let c = mkApp (c, [| mkRel 1; refl cat (mkRel 1) |]) in
-  (sigma, mkProd (pos_name, cat.cat_obj, c))
+  let ans = if toplevel then mkProd (pos_name, cat.cat_obj, c) else c in
+  (sigma, ans)
 
-let translate_context translator cat env sigma ctx =
-  let empty = { context = []; category = cat; translator; } in
+let translate_context ?(toplevel = true) translator cat env sigma ctx =
+  let empty = empty translator cat env in
   let fold (na, body, t) (sigma, fctx, ctx_) =
     let (sigma, body_) = match body with
     | None -> (sigma, None)
@@ -219,6 +228,6 @@ let translate_context translator cat env sigma ctx =
     let fctx = add_variable fctx in
     (sigma, fctx, decl_ :: ctx_)
   in
-  let init = [obj_name, None, cat.cat_obj] in
+  let init = if toplevel then [obj_name, None, cat.cat_obj] else [] in
   let (sigma, _, ctx_) = List.fold_right fold ctx (sigma, empty, init) in
   (sigma, ctx_)

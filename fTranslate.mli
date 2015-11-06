@@ -11,11 +11,11 @@ exception MissingGlobal of global_reference
 
 type translator = global_reference Refmap.t
 
-val translate : translator -> category ->
+val translate : ?toplevel:bool -> translator -> category ->
   Environ.env -> Evd.evar_map -> Constr.t -> Evd.evar_map * Constr.t
 
-val translate_type : translator -> category ->
+val translate_type : ?toplevel:bool -> translator -> category ->
   Environ.env -> Evd.evar_map -> Constr.t -> Evd.evar_map * Constr.t
 
-val translate_context : translator -> category ->
+val translate_context : ?toplevel:bool -> translator -> category ->
   Environ.env -> Evd.evar_map -> Context.rel_context -> Evd.evar_map * Context.rel_context
