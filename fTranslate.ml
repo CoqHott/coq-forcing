@@ -135,7 +135,11 @@ let rec translate_aux env fctx sigma c = match kind_of_term c with
   let tpe = it_mkProd_or_LetIn (mkSort s') ext in
   let lam = it_mkLambda_or_LetIn tpe ext0 in
   (sigma, lam)
-| Cast (c, k, t) -> assert false
+| Cast (c, k, t) ->
+  let (sigma, c_) = translate_aux env fctx sigma c in
+  let (sigma, t_) = translate_type env fctx sigma t in
+  let ans = mkCast (c_, k, t_) in
+  (sigma, ans)
 | Prod (na, t, u) ->
   let (ext0, fctx) = extend fctx in
   (** Translation of t *)
