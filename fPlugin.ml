@@ -48,6 +48,7 @@ let force_tac cat c =
     let env = Proofview.Goal.env gl in
     let sigma = Proofview.Goal.sigma gl in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
+    let sigma, _ = Typing.type_of env sigma ans in
     Proofview.Unsafe.tclEVARS sigma <*>
     Tactics.letin_tac None Names.Name.Anonymous ans None Locusops.allHyps
   end
@@ -58,6 +59,7 @@ let force_solve cat c =
     let sigma = Proofview.Goal.sigma gl in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
     msg_info (Termops.print_constr ans);
+    let sigma, _ = Typing.type_of env sigma ans in
     Proofview.Unsafe.tclEVARS sigma <*>
     Proofview.Refine.refine_casted begin fun h -> (h, ans) end
   end
@@ -117,7 +119,7 @@ let force_translate_inductive cat ind =
   | Some None -> Some None
   | Some (Some (id, _, _)) -> Some (Some (translate_name id))
   in
-  let sigma = Evd.empty in
+  let sigma = Evd.from_env env in
   let (sigma, params_) = FTranslate.translate_context !translator cat env sigma mib.mind_params_ctxt in
   let (sigma, bodies_) = Array.fold_right make_one_entry mib.mind_packets (sigma, []) in
   let make_param = function
@@ -149,10 +151,11 @@ let force_translate (obj, hom) gr idopt =
     FTranslate.cat_hom = hom;
   } in
   (** Translate the type *)
-  let sigma = Evd.empty in
   let typ = Universes.unsafe_type_of_global gr in
   let env = Global.env () in
+  let sigma = Evd.from_env env in
   let (sigma, typ) = FTranslate.translate_type !translator cat env sigma typ in
+  let sigma, _ = Typing.type_of env sigma typ in
   let uctx = Evd.evar_universe_context sigma in
   (** Define the term by tactic *)
   let id = match idopt with

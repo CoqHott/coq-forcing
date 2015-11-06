@@ -141,6 +141,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let (ext0, fctx) = extend fctx in
   let (ext, fctx) = extend fctx in
   let (sigma, s') = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
+  let sigma = Evd.set_leq_sort env sigma s s' in
   let tpe = it_mkProd_or_LetIn (mkSort s') ext in
   let lam = it_mkLambda_or_LetIn tpe ext0 in
   (sigma, lam)
@@ -182,7 +183,8 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
     (sigma, u_)
   in
   let (sigma, args_) = CList.fold_map fold sigma (Array.to_list args) in
-  (sigma, mkApp (t_, Array.of_list args_))
+  let app = mkApp (t_, Array.of_list args_) in
+  (sigma, app)
 | Var id ->
   apply_global env sigma (VarRef id) Univ.Instance.empty fctx
 | Const (p, u) ->
