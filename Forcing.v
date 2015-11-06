@@ -26,3 +26,4 @@ Definition bar := foo (forall A : Type, A).
 
 Forcing Translate foo using Obj Hom.
 Fail Forcing Translate bar using Obj Hom.
+Fail Forcing Translate nat using Obj Hom.

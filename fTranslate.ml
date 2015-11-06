@@ -228,6 +228,6 @@ let translate_context ?(toplevel = true) translator cat env sigma ctx =
     let fctx = add_variable fctx in
     (sigma, fctx, decl_ :: ctx_)
   in
-  let init = if toplevel then [obj_name, None, cat.cat_obj] else [] in
+  let init = if toplevel then [pos_name, None, cat.cat_obj] else [] in
   let (sigma, _, ctx_) = List.fold_right fold ctx (sigma, empty, init) in
   (sigma, ctx_)

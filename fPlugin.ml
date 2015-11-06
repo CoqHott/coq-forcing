@@ -82,9 +82,21 @@ let force_translate_inductive cat ind =
   let (mib, _) = Global.lookup_inductive ind in
   (** For each block in the inductive we build the translation *)
   let make_one_entry body (sigma, bodies_) =
-    let arity = match body.mind_arity with
+    let template = match body.mind_arity with
     | RegularArity _ -> false
     | TemplateArity _ -> true
+    in
+    (** Heuristic for the return type. Can we do better? *)
+    let (sigma, s) =
+      if List.mem Sorts.InType body.mind_kelim then Evarutil.new_Type env sigma
+      else (sigma, mkProp)
+    in
+    let (sigma, arity) =
+      let nindexes = List.length body.mind_arity_ctxt - List.length mib.mind_params_ctxt in
+      let ctx = List.firstn nindexes body.mind_arity_ctxt in
+      let env' = Environ.push_rel_context mib.mind_params_ctxt env in
+      let a = it_mkProd_or_LetIn s ctx in
+      FTranslate.translate_type ~toplevel:false !translator cat env' sigma a
     in
     let fold_lc typ (sigma, lc_) =
       (sigma, typ :: lc_)
@@ -92,8 +104,8 @@ let force_translate_inductive cat ind =
     let (sigma, lc_) = Array.fold_right fold_lc body.mind_user_lc (sigma, []) in
     let body_ = {
       mind_entry_typename = translate_name body.mind_typename;
-      mind_entry_arity = assert false;
-      mind_entry_template = arity;
+      mind_entry_arity = arity;
+      mind_entry_template = template;
       mind_entry_consnames = CArray.map_to_list translate_name body.mind_consnames;
       mind_entry_lc = Array.to_list body.mind_user_lc;
     } in
