@@ -75,21 +75,40 @@ let force_translate_constant cat cst id uctx typ =
 let force_translate_inductive cat ind =
   let open Declarations in
   let open Entries in
+  let env = Global.env () in
   let (mib, _) = Global.lookup_inductive ind in
-  let make_one_entry body =
-    {
+  let make_one_entry (sigma, bodies_) body =
+    let arity = match body.mind_arity with
+    | RegularArity _ -> false
+    | TemplateArity _ -> true
+    in
+    let body_ = {
       mind_entry_typename = translate_name body.mind_typename;
       mind_entry_arity = assert false;
-      mind_entry_template = assert false;
+      mind_entry_template = arity;
       mind_entry_consnames = CArray.map_to_list translate_name body.mind_consnames;
       mind_entry_lc = Array.to_list body.mind_user_lc;
-    }
+    } in
+    (sigma, body_ :: bodies_)
   in
+  let record = match mib.mind_record with
+  | None -> None
+  | Some None -> Some None
+  | Some (Some (id, _, _)) -> Some (Some (translate_name id))
+  in
+  let sigma = Evd.empty in
+  let (sigma, params_) = FTranslate.translate_context !translator cat env sigma mib.mind_params_ctxt in
+  let (sigma, bodies_) = Array.fold_left make_one_entry (sigma, []) mib.mind_packets in
+  let make_param = function
+  | (na, None, t) -> (Nameops.out_name na, LocalAssum t)
+  | (na, Some body, _) -> (Nameops.out_name na, LocalDef body)
+  in
+  let params_ = List.map make_param params_ in
   let mib_ = {
-    mind_entry_record = Option.map (fun b -> Option.map pi1 b) mib.mind_record;
+    mind_entry_record = record;
     mind_entry_finite = mib.mind_finite;
-    mind_entry_params = assert false;
-    mind_entry_inds = CArray.map_to_list make_one_entry mib.mind_packets;
+    mind_entry_params = params_;
+    mind_entry_inds = bodies_;
     mind_entry_polymorphic = mib.mind_polymorphic;
     (** FIXME *)
     mind_entry_universes = Univ.UContext.empty;

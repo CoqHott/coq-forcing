@@ -199,6 +199,24 @@ let translate translator cat env sigma c =
   let (sigma, c) = translate_aux env empty sigma c in
   (sigma, mkLambda (pos_name, cat.cat_obj, c))
 
+let translate_context translator cat env sigma ctx =
+  let empty = { context = []; category = cat; translator; } in
+  let fold (na, body, t) (sigma, fctx, ctx_) =
+    let (sigma, body_) = match body with
+    | None -> (sigma, None)
+    | Some _ -> assert false
+    in
+    let (ext, tfctx) = extend fctx in
+    let (sigma, t_) = translate_type env tfctx sigma t in
+    let t_ = it_mkProd_or_LetIn t_ ext in
+    let decl_ = (na, body_, t_) in
+    let fctx = add_variable fctx in
+    (sigma, fctx, decl_ :: ctx_)
+  in
+  let init = [obj_name, None, cat.cat_obj] in
+  let (sigma, _, ctx_) = List.fold_right fold ctx (sigma, empty, init) in
+  (sigma, ctx_)
+
 let translate_type translator cat env sigma c =
   let empty = { context = []; category = cat; translator; } in
   let (sigma, c) = translate_aux env empty sigma c in

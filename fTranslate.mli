@@ -16,3 +16,6 @@ val translate : translator -> category ->
 
 val translate_type : translator -> category ->
   Environ.env -> Evd.evar_map -> Constr.t -> Evd.evar_map * Constr.t
+
+val translate_context : translator -> category ->
+  Environ.env -> Evd.evar_map -> Context.rel_context -> Evd.evar_map * Context.rel_context
