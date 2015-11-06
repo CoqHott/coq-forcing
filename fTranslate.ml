@@ -36,6 +36,16 @@ let trns cat a b c f g =
   let lam = mkLambda (knt_name, hom, app') in
   mkLambda (obj_name, cat.cat_obj, lam)
 
+(** Optimization of cuts *)
+
+let mkOptApp (t, args) =
+  let len = Array.length args in
+  try
+    let (_, t) = Term.decompose_lam_n len t in
+    Vars.substl (CArray.rev_to_list args) t
+  with _ ->
+    mkApp (t, args)
+
 (** Forcing translation *)
 
 type forcing_condition =
@@ -191,7 +201,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 and otranslate_type env fctx sigma t =
   let (sigma, t_) = otranslate env fctx sigma t in
   let last = mkRel (last_condition fctx) in
-  let t_ = mkApp (t_, [| last; refl fctx.category last |]) in
+  let t_ = mkOptApp (t_, [| last; refl fctx.category last |]) in
   (sigma, t_)
 
 let empty translator cat env =
@@ -209,8 +219,7 @@ let translate ?(toplevel = true) translator cat env sigma c =
 
 let translate_type ?(toplevel = true) translator cat env sigma c =
   let empty = empty translator cat env in
-  let (sigma, c) = otranslate env empty sigma c in
-  let c = mkApp (c, [| mkRel 1; refl cat (mkRel 1) |]) in
+  let (sigma, c) = otranslate_type env empty sigma c in
   let ans = if toplevel then mkProd (pos_name, cat.cat_obj, c) else c in
   (sigma, ans)
 
