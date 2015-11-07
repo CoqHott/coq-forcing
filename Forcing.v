@@ -17,14 +17,15 @@ _force (forall A : Type, (A -> Type) -> A -> Type).
 _force (fun (A : Type) (x : A) (y : A) => forall (P : A -> Type), P x -> P y).
 _force (forall A : Type, A -> A -> Type).
 (* _force ((fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A)). *)
-(* _force (fun (A B : Type) (x : A) (y : B) => forall (P : A -> B -> Type) (Q : B -> Type), P x y -> Q y). *)
+_force (fun (A B : Type) (x : A) (y : B) => forall (P : A -> B -> Type) (Q : B -> Type), P x y -> Q y).
 exact I.
 Qed.
 
 Definition foo := fun A (x : A) => x.
 Definition bar := foo (forall A : Type, A).
+Definition qux := (fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A).
 
 Forcing Translate foo using Obj Hom.
-
 Forcing Translate bar using Obj Hom.
+Forcing Translate qux using Obj Hom.
 Fail Forcing Translate nat using Obj Hom.

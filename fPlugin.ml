@@ -74,10 +74,13 @@ let force_translate_constant cat cst id =
   let uctx = Evd.evar_universe_context sigma in
   (** Define the term by tactic *)
   let body = Option.get (Global.body_of_constant cst) in
-  let tac = force_solve cat body in
-  let sign = Environ.empty_named_context_val in
-  let (const, safe, uctx) = Pfedit.build_constant_by_tactic id uctx sign typ tac in
-  let cd = Entries.DefinitionEntry const in
+  let (sigma, body) = FTranslate.translate !translator cat env sigma body in
+  let evdref = ref sigma in
+  let () = Typing.check env evdref body typ in
+  let sigma = !evdref in
+  let (_, uctx) = Evd.universe_context sigma in
+  let ce = Declare.definition_entry ~types:typ ~univs:uctx body in
+  let cd = Entries.DefinitionEntry ce in
   let decl = (cd, IsProof Lemma) in
   let cst = Declare.declare_constant id decl in
   ConstRef cst
