@@ -12,7 +12,7 @@ open Proofview.Notations
 
 let translate_name id =
   let id = Id.to_string id in
-  Id.of_string ("ℱ" ^ id)
+  Id.of_string ("ᶠ" ^ id)
 
 (** Record of translation between globals *)
 

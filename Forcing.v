@@ -28,4 +28,7 @@ Definition qux := (fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A).
 Forcing Translate foo using Obj Hom.
 Forcing Translate bar using Obj Hom.
 Forcing Translate qux using Obj Hom.
+
+Check ᶠqux.
+
 Fail Forcing Translate nat using Obj Hom.
