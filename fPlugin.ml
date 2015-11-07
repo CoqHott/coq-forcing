@@ -64,7 +64,15 @@ let force_solve cat c =
     Proofview.Refine.refine_casted begin fun h -> (h, ans) end
   end
 
-let force_translate_constant cat cst id uctx typ =
+let force_translate_constant cat cst id =
+  (** Translate the type *)
+  let typ = Universes.unsafe_type_of_global (ConstRef cst) in
+  let env = Global.env () in
+  let sigma = Evd.from_env env in
+  let (sigma, typ) = FTranslate.translate_type !translator cat env sigma typ in
+  let sigma, _ = Typing.type_of env sigma typ in
+  let uctx = Evd.evar_universe_context sigma in
+  (** Define the term by tactic *)
   let body = Option.get (Global.body_of_constant cst) in
   let tac = force_solve cat body in
   let sign = Environ.empty_named_context_val in
@@ -150,20 +158,12 @@ let force_translate (obj, hom) gr idopt =
     FTranslate.cat_obj = obj;
     FTranslate.cat_hom = hom;
   } in
-  (** Translate the type *)
-  let typ = Universes.unsafe_type_of_global gr in
-  let env = Global.env () in
-  let sigma = Evd.from_env env in
-  let (sigma, typ) = FTranslate.translate_type !translator cat env sigma typ in
-  let sigma, _ = Typing.type_of env sigma typ in
-  let uctx = Evd.evar_universe_context sigma in
-  (** Define the term by tactic *)
   let id = match idopt with
   | None -> translate_name (Nametab.basename_of_global gr)
   | Some id -> id
   in
   let ans = match gr with
-  | ConstRef cst -> force_translate_constant cat cst id uctx typ
+  | ConstRef cst -> force_translate_constant cat cst id
   | IndRef ind -> force_translate_inductive cat ind
   | _ -> error "Translation not handled."
   in
