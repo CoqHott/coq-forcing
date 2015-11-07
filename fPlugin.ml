@@ -112,7 +112,14 @@ let force_translate_inductive cat ind =
       FTranslate.translate_type ~toplevel:false !translator cat env' sigma a
     in
     let fold_lc typ (sigma, lc_) =
-      (sigma, typ :: lc_)
+      (** We exploit the fact that the translation actually does not depend on
+          the rel_context of the environment except for its length. *)
+      let self = List.init (Array.length mib.mind_packets) (fun _ -> (Name.Anonymous, None, mkProp)) in
+      let env' = Environ.push_rel_context self env in
+      let (sigma, typ_) = FTranslate.translate_type ~toplevel:false ~lift:1 !translator cat env' sigma typ in
+      (** The translation assumes that the first introduced variable is the
+          toplevel forcing condition, which is not the case here. *)
+      (sigma, typ_ :: lc_)
     in
     let (sigma, lc_) = Array.fold_right fold_lc body.mind_user_lc (sigma, []) in
     let body_ = {
@@ -120,7 +127,7 @@ let force_translate_inductive cat ind =
       mind_entry_arity = arity;
       mind_entry_template = template;
       mind_entry_consnames = CArray.map_to_list translate_name body.mind_consnames;
-      mind_entry_lc = Array.to_list body.mind_user_lc;
+      mind_entry_lc = lc_;
     } in
     (sigma, body_ :: bodies_)
   in
@@ -133,19 +140,28 @@ let force_translate_inductive cat ind =
   let sigma = Evd.from_env env in
   let (sigma, params_) = FTranslate.translate_context !translator cat env sigma mib.mind_params_ctxt in
   let (sigma, bodies_) = Array.fold_right make_one_entry mib.mind_packets (sigma, []) in
+  let debug b =
+    msg_info (Nameops.pr_id b.mind_entry_typename ++ str " : " ++ Termops.print_constr (it_mkProd_or_LetIn b.mind_entry_arity params_));
+    let cs = List.combine b.mind_entry_consnames b.mind_entry_lc in
+    let pr_constructor (id, tpe) =
+      msg_info (Nameops.pr_id id ++ str " : " ++ Termops.print_constr tpe)
+    in
+    List.iter pr_constructor cs
+  in
+  List.iter debug bodies_;
   let make_param = function
   | (na, None, t) -> (Nameops.out_name na, LocalAssum t)
   | (na, Some body, _) -> (Nameops.out_name na, LocalDef body)
   in
   let params_ = List.map make_param params_ in
+  let (_, uctx) = Evd.universe_context sigma in
   let mib_ = {
     mind_entry_record = record;
     mind_entry_finite = mib.mind_finite;
     mind_entry_params = params_;
     mind_entry_inds = bodies_;
     mind_entry_polymorphic = mib.mind_polymorphic;
-    (** FIXME *)
-    mind_entry_universes = Univ.UContext.empty;
+    mind_entry_universes = uctx;
     mind_entry_private = mib.mind_private;
   } in
   let (_, kn), _ = Declare.declare_mind mib_ in

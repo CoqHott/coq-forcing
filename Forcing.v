@@ -29,6 +29,6 @@ Forcing Translate foo using Obj Hom.
 Forcing Translate bar using Obj Hom.
 Forcing Translate qux using Obj Hom.
 
-Check ᶠqux.
+Print ᶠqux.
 
 Fail Forcing Translate nat using Obj Hom.
