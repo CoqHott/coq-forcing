@@ -22,13 +22,30 @@ exact I.
 Qed.
 
 Definition foo := fun A (x : A) => x.
-Definition bar := foo (forall A : Type, A).
+Definition bar := foo (foo (forall A : Type, A -> A) (fun A (x : A) => x) Type Type).
 Definition qux := (fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A).
+Definition quz := Type -> Type.
 
 Forcing Translate foo using Obj Hom.
 Forcing Translate bar using Obj Hom.
 Forcing Translate qux using Obj Hom.
+Forcing Translate quz using Obj Hom.
 
+Print ᶠfoo.
+Print ᶠbar.
 Print ᶠqux.
+Print ᶠquz.
 
 Fail Forcing Translate nat using Obj Hom.
+
+(** Define a term directly in the forcing layer. *)
+
+Forcing Definition sum : Type -> Type -> Type using Obj Hom.
+Proof.
+intros p A B p0 α.
+exact ((forall p1 (α0 : p0 ≤ p1), A p1 ((α ∘ α0) ∘ #) p1 #) + (forall p1 (α0 : p0 ≤ p1), B p1 ((α ∘ α0) ∘ #) p1 #))%type. 
+Defined.
+
+Print sum.
+Print ᶠsum.
+

@@ -192,6 +192,37 @@ let force_translate (obj, hom) gr idopt =
   in
   ()
 
+(** Implementation in the forcing layer *)
+
+let force_implement (obj, hom) id typ idopt =
+  let env = Global.env () in
+  let obj = Universes.constr_of_global (Nametab.global obj) in
+  let hom = Universes.constr_of_global (Nametab.global hom) in
+  let cat = {
+    FTranslate.cat_obj = obj;
+    FTranslate.cat_hom = hom;
+  } in
+  let id_ = match idopt with
+  | None -> translate_name id
+  | Some id -> id
+  in
+  let kind = Global, false, DefinitionBody Definition in
+  let sigma = Evd.from_env env in
+  let (typ, uctx) = Constrintern.interp_type env sigma typ in
+  let sigma = Evd.from_ctx uctx in
+  let (sigma, typ_) = FTranslate.translate_type !translator cat env sigma typ in
+  let hook _ dst =
+    (** Declare the original term as an axiom *)
+    let param = (None, false, (typ, Evd.evar_context_universe_context uctx), None) in
+    let cb = Entries.ParameterEntry param in
+    let cst = Declare.declare_constant id (cb, IsDefinition Definition) in
+    (** Attach the axiom to the forcing implementation *)
+    Lib.add_anonymous_leaf (in_translator [ConstRef cst, dst])
+  in
+  let hook ctx = Lemmas.mk_hook hook in
+  let () = Lemmas.start_proof_univs id_ kind sigma typ_ hook in
+  ()
+
 (** Error handling *)
 
 let _ = register_handler begin function
