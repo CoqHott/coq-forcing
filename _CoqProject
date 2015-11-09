@@ -8,5 +8,6 @@ g_forcing.ml4
 forcing.mllib
 Forcing.v
 Test.v
+Sigma.v
 Bool.v
 Nat.v
