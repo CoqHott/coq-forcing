@@ -33,4 +33,14 @@ intros p0 α.
 apply (n _ α).
 Defined.
 
+Forcing Definition nat_rect :
+  forall (P : nat -> Type),
+  P O ->
+  (forall n, P n -> P (S n)) ->
+  forall n, P n
+using Obj Hom.
+Proof.
+intros p P H0 HS n.
+Abort.
+
 End Nat.
