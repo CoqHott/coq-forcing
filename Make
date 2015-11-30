@@ -6,8 +6,6 @@ fPlugin.ml
 fPlugin.mli
 g_forcing.ml4
 forcing.mllib
+Cube.v
 Forcing.v
 Test.v
-Sigma.v
-Bool.v
-Nat.v

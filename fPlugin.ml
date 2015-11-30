@@ -14,6 +14,16 @@ let translate_name id =
   let id = Id.to_string id in
   Id.of_string ("ᶠ" ^ id)
 
+let mkCube lbl =
+  let dp = List.map Id.of_string ["Cube"; "Forcing"] in
+  let mp = ModPath.MPfile (DirPath.make dp) in
+  Constant.make2 mp lbl
+
+let cubes = {
+  FTranslate.cat_obj = mkConst (mkCube (Label.make "Obj"));
+  FTranslate.cat_hom = mkConst (mkCube (Label.make "Hom"));
+}
+
 (** Record of translation between globals *)
 
 let translator : FTranslate.translator ref =
@@ -43,8 +53,9 @@ let in_translator : translator_obj -> obj =
 
 let empty_translator = Refmap.empty
 
-let force_tac cat c =
+let force_tac c =
   Proofview.Goal.nf_enter begin fun gl ->
+    let cat = cubes in
     let env = Proofview.Goal.env gl in
     let sigma = Proofview.Goal.sigma gl in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
@@ -168,15 +179,10 @@ let force_translate_inductive cat ind =
   let mib_ = Global.mind_of_delta_kn kn in
   IndRef (mib_, snd ind)
 
-let force_translate (obj, hom) gr idopt =
+let force_translate gr idopt =
   let r = gr in
   let gr = Nametab.global gr in
-  let obj = Universes.constr_of_global (Nametab.global obj) in
-  let hom = Universes.constr_of_global (Nametab.global hom) in
-  let cat = {
-    FTranslate.cat_obj = obj;
-    FTranslate.cat_hom = hom;
-  } in
+  let cat = cubes in
   let id = match idopt with
   | None -> translate_name (Nametab.basename_of_global gr)
   | Some id -> id
@@ -194,14 +200,9 @@ let force_translate (obj, hom) gr idopt =
 
 (** Implementation in the forcing layer *)
 
-let force_implement (obj, hom) id typ idopt =
+let force_implement id typ idopt =
   let env = Global.env () in
-  let obj = Universes.constr_of_global (Nametab.global obj) in
-  let hom = Universes.constr_of_global (Nametab.global hom) in
-  let cat = {
-    FTranslate.cat_obj = obj;
-    FTranslate.cat_hom = hom;
-  } in
+  let cat = cubes in
   let id_ = match idopt with
   | None -> translate_name id
   | Some id -> id
