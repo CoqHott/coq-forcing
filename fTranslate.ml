@@ -36,7 +36,24 @@ let trns cat a b c f g =
   let lam = mkLambda (knt_name, hom, app') in
   mkLambda (obj_name, cat.cat_obj, lam)
 
+(** Translation of types *)
+
+let cube =
+  let dp = List.map Id.of_string ["Cube"; "Forcing"] in
+  ModPath.MPfile (DirPath.make dp)
+
+let cType = (MutInd.make2 cube (Label.make "CType"), 0)
+let ctype = (cType, 1)
+let ptype = Projection.make (Constant.make2 cube (Label.make "type")) false
+
 (** Optimization of cuts *)
+
+let mkfType c = match kind_of_term c with
+| App (i, args) ->
+  if Array.length args = 2 && Term.isConstruct i then args.(1)
+  else mkProj (ptype, c)
+| _ ->
+  mkProj (ptype, c)
 
 let mkOptApp (t, args) =
   let len = Array.length args in
@@ -138,12 +155,13 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let ans = mkApp (mkRel m, [| p; f |]) in
   (sigma, ans)
 | Sort s ->
+  let last = mkRel (last_condition fctx) in
   let (ext0, fctx) = extend fctx in
-  let (ext, fctx) = extend fctx in
-  let (sigma, s') = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
-  let sigma = Evd.set_leq_sort env sigma s s' in
-  let tpe = it_mkProd_or_LetIn (mkSort s') ext in
+  let (sigma, pi) = Evd.fresh_inductive_instance env sigma cType in
+  let tpe = mkApp (mkIndU pi, [| mkRel 2 |]) in
   let lam = it_mkLambda_or_LetIn tpe ext0 in
+  let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
+  let lam = mkApp (mkConstructU pc, [| last; lam |]) in
   (sigma, lam)
 | Cast (c, k, t) ->
   let (sigma, c_) = otranslate env fctx sigma c in
@@ -151,6 +169,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let ans = mkCast (c_, k, t_) in
   (sigma, ans)
 | Prod (na, t, u) ->
+  let last = mkRel (last_condition fctx) in
   let (ext0, fctx) = extend fctx in
   (** Translation of t *)
   let (ext, tfctx) = extend fctx in
@@ -162,6 +181,8 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   (** Result *)
   let ans = mkProd (na, t_, u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
+  let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
+  let lam = mkApp (mkConstructU pc, [| last; lam |]) in
   (sigma, lam)
 | Lambda (na, t, u) ->
   (** Translation of t *)
@@ -203,7 +224,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 and otranslate_type env fctx sigma t =
   let (sigma, t_) = otranslate env fctx sigma t in
   let last = mkRel (last_condition fctx) in
-  let t_ = mkOptApp (t_, [| last; refl fctx.category last |]) in
+  let t_ = mkOptApp (mkfType t_, [| last; refl fctx.category last |]) in
   (sigma, t_)
 
 let empty translator cat lift env =

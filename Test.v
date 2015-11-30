@@ -15,14 +15,20 @@ exact I.
 Qed.
 
 Definition foo := fun A (x : A) => x.
-Definition bar := foo (foo (forall A : Type, A -> A) (fun A (x : A) => x) Type Type).
+(** FIXME: handle universe polymorphism? *)
+(* Definition bar := foo (foo (forall A : Type, A -> A) (fun A (x : A) => x) Type Type). *)
+Definition bar := (foo (forall A : Type, A -> A) (fun A (x : A) => x) Type Type).
 Definition qux := (fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A).
 Definition quz := Type -> Type.
+Definition eq A (x y : A) := forall (P : A -> Type), P x -> P y.
+Definition UIP (A : Type) := forall (x y : A) (p q : eq A x y), eq (eq A x y) p q.
 
 Forcing Translate foo.
 Forcing Translate bar.
 Forcing Translate qux.
 Forcing Translate quz.
+Forcing Translate eq.
+Forcing Translate UIP.
 
 Print ᶠfoo.
 Print ᶠbar.
@@ -35,8 +41,9 @@ Print ᶠquz.
 
 Forcing Definition sum : Type -> Type -> Type.
 Proof.
-intros p A B p0 α.
-exact ((forall p1 (α0 : p0 ≤ p1), A p1 ((α ∘ α0) ∘ #) p1 #) + (forall p1 (α0 : p0 ≤ p1), B p1 ((α ∘ α0) ∘ #) p1 #))%type. 
+intros p A B; constructor.
++ intros p0 α.
+  exact (forall p1 (α0 : p0 ≤ p1), ((A p1 ((α ∘ α0) ∘ #)).(type _) p1 #) + (forall p1 (α0 : p0 ≤ p1), (B p1 ((α ∘ α0) ∘ #)).(type _) p1 #))%type. 
 Defined.
 
 Print sum.

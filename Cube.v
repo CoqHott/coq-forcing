@@ -9,7 +9,8 @@ Axiom ε : forall n, n ≤ S n.
 Axiom δ₀ δ₁ : forall n, S n ≤ n.
 
 Set Primitive Projections.
+Set Universe Polymorphism.
 
-Record CType p := {
-  type : forall p0 (α : p ≤ p0), Type;
+Record CType@{i} p := cType {
+  type : forall p0 (α : p ≤ p0), Type@{i};
 }.
