@@ -36,27 +36,13 @@ let trns cat a b c f g =
   let lam = mkLambda (knt_name, hom, app') in
   mkLambda (obj_name, cat.cat_obj, lam)
 
-(** Standard datatypes *)
-
-let mkS t =
-  let dp = List.map Id.of_string ["Datatypes"; "Init"; "Coq"] in
-  let mp = ModPath.MPfile (DirPath.make dp) in
-  let nat = (MutInd.make2 mp (Label.make "nat"), 0) in
-  mkApp (mkConstruct (nat, 2), [| t |])
-
 (** Translation of types *)
 
 let cube =
   let dp = List.map Id.of_string ["Cube"; "Forcing"] in
   ModPath.MPfile (DirPath.make dp)
 
-let cType = (MutInd.make2 cube (Label.make "Typeᶠ"), 0)
-let ctype = (cType, 1)
 let ptype = Projection.make (Constant.make2 cube (Label.make "type")) false
-
-let cube_eps = mkConst (Constant.make2 cube (Label.make "ε"))
-let cube_dt0 = mkConst (Constant.make2 cube (Label.make "δ₀"))
-let cube_dt1 = mkConst (Constant.make2 cube (Label.make "δ₁"))
 
 let cube_mkType = Constant.make2 cube (Label.make "mkTypeᶠ")
 let cube_mkProd = Constant.make2 cube (Label.make "mkProdᶠ")
@@ -98,9 +84,6 @@ type forcing_context = {
 
 let pos_name = Name (Id.of_string "p")
 let hom_name = Name (Id.of_string "α")
-let eql_name = Name (Id.of_string "e")
-let lft_name = Name (Id.of_string "e₀")
-let rgt_name = Name (Id.of_string "e₁")
 
 let dummy = mkProp
 
@@ -148,28 +131,6 @@ let extend fctx =
 
 let add_variable fctx =
   { fctx with context = Variable :: fctx.context }
-
-(** Type translations *)
-
-let mkPath fctx typ p =
-  let (ext, _) = extend fctx in
-  let sp = mkS (mkRel 2) in
-  let eps = mkApp (cube_eps, [| mkRel 2 |]) in
-  let d0 = mkApp (cube_dt0, [| mkRel 2 |]) in
-  let d1 = mkApp (cube_dt1, [| mkRel 2 |]) in
-  let fe = trns fctx.category dummy dummy sp (mkRel 1) eps in
-  let h = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 typ, [| sp; fe |])) ext in
-  let fe0 = trns fctx.category dummy dummy (mkRel 2) fe d0 in
-  let fe1 = trns fctx.category dummy dummy (mkRel 2) fe d1 in
-  let h0 = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 typ, [| mkRel 2; fe0 |])) ext in
-  let h1 = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 typ, [| mkRel 2; fe1 |])) ext in
-  let args = [
-    (rgt_name, None, Vars.lift 2 h1);
-    (lft_name, None, Vars.lift 1 h0);
-    (eql_name, None, h);
-  ] in
-  it_mkLambda_or_LetIn mkProp args
-
 
 (** Handling of globals *)
 
