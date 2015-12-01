@@ -11,11 +11,11 @@ Axiom δ₀ δ₁ : forall n, S n ≤ n.
 Set Primitive Projections.
 Set Universe Polymorphism.
 
-Record CType@{i} p := cType {
+Record Typeᶠ@{i} p := cType {
   type : forall p0 (α : p ≤ p0), Type@{i};
   path :
-    (forall p0 (α : p ≤ p0), type p0 α) ->
-    (forall p0 (α : p ≤ p0), type p0 α) ->
-    (forall p0 (α : p ≤ p0), type p0 α) ->
+    (forall p0 (α : p ≤ p0), type (S p0) (α ∘ ε p0)) ->
+(*     (forall p0 (α : p ≤ p0), type p0 (α ∘ ε p0 ∘ δ₀ p0)) -> *)
+(*     (forall p0 (α : p ≤ p0), type p0 (α ∘ ε p0 ∘ δ₁ p0)) -> *)
     Type@{i};
 }.

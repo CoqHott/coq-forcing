@@ -36,15 +36,25 @@ let trns cat a b c f g =
   let lam = mkLambda (knt_name, hom, app') in
   mkLambda (obj_name, cat.cat_obj, lam)
 
+(** Standard datatypes *)
+
+let mkS t =
+  let dp = List.map Id.of_string ["Datatypes"; "Init"; "Coq"] in
+  let mp = ModPath.MPfile (DirPath.make dp) in
+  let nat = (MutInd.make2 mp (Label.make "nat"), 0) in
+  mkApp (mkConstruct (nat, 2), [| t |])
+
 (** Translation of types *)
 
 let cube =
   let dp = List.map Id.of_string ["Cube"; "Forcing"] in
   ModPath.MPfile (DirPath.make dp)
 
-let cType = (MutInd.make2 cube (Label.make "CType"), 0)
+let cType = (MutInd.make2 cube (Label.make "Typeᶠ"), 0)
 let ctype = (cType, 1)
 let ptype = Projection.make (Constant.make2 cube (Label.make "type")) false
+
+let cube_eps = mkConst (Constant.make2 cube (Label.make "ε"))
 
 (** Optimization of cuts *)
 
@@ -134,6 +144,22 @@ let extend fctx =
 let add_variable fctx =
   { fctx with context = Variable :: fctx.context }
 
+(** Type translations *)
+
+let mkPath fctx typ p =
+  let (ext, _) = extend fctx in
+  let sp = mkS (mkRel 2) in
+  let eps = mkApp (cube_eps, [| mkRel 2 |]) in
+  let fe = trns fctx.category dummy dummy sp (mkRel 1) eps in
+  let h = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 typ, [| sp; fe |])) ext in
+  let args = [
+(*       (rgt_name, None, Vars.lift 2 h); *)
+(*       (lft_name, None, Vars.lift 1 h); *)
+    (eql_name, None, h);
+  ] in
+  it_mkLambda_or_LetIn mkProp args
+
+
 (** Handling of globals *)
 
 let apply_global env sigma gr u fctx =
@@ -157,20 +183,13 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   (sigma, ans)
 | Sort s ->
   let last = mkRel (last_condition fctx) in
+  let ofctx = fctx in
   let (ext0, fctx) = extend fctx in
   let (sigma, pi) = Evd.fresh_inductive_instance env sigma cType in
   let tpe = mkApp (mkIndU pi, [| mkRel 2 |]) in
   let lam = it_mkLambda_or_LetIn tpe ext0 in
   let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
-  let path =
-    let h = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 lam, [| mkRel 2; mkRel 1 |])) ext0 in
-    let args = [
-      (rgt_name, None, Vars.lift 2 h);
-      (lft_name, None, Vars.lift 1 h);
-      (eql_name, None, h);
-    ] in
-    it_mkLambda_or_LetIn mkProp args
-  in
+  let path = mkPath ofctx lam mkProp in
   let lam = mkApp (mkConstructU pc, [| last; lam; path |]) in
   (sigma, lam)
 | Cast (c, k, t) ->
@@ -180,6 +199,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   (sigma, ans)
 | Prod (na, t, u) ->
   let last = mkRel (last_condition fctx) in
+  let ofctx = fctx in
   let (ext0, fctx) = extend fctx in
   (** Translation of t *)
   let (ext, tfctx) = extend fctx in
@@ -192,15 +212,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let ans = mkProd (na, t_, u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
   let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
-  let path =
-    let h = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 lam, [| mkRel 2; mkRel 1 |])) ext0 in
-    let args = [
-      (rgt_name, None, Vars.lift 2 h);
-      (lft_name, None, Vars.lift 1 h);
-      (eql_name, None, h);
-    ] in
-    it_mkLambda_or_LetIn mkProp args
-  in
+  let path = mkPath ofctx lam mkProp in
   let lam = mkApp (mkConstructU pc, [| last; lam; path |]) in
   (sigma, lam)
 | Lambda (na, t, u) ->
