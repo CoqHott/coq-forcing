@@ -41,9 +41,11 @@ Print ᶠquz.
 
 Forcing Definition sum : Type -> Type -> Type.
 Proof.
-intros p A B; constructor.
+intros p A B; refine (cType _ _ _).
 + intros p0 α.
   exact (forall p1 (α0 : p0 ≤ p1), ((A p1 ((α ∘ α0) ∘ #)).(type _) p1 #) + (forall p1 (α0 : p0 ≤ p1), (B p1 ((α ∘ α0) ∘ #)).(type _) p1 #))%type. 
++ intros.
+  exact Prop.
 Defined.
 
 Print sum.

@@ -49,9 +49,7 @@ let ptype = Projection.make (Constant.make2 cube (Label.make "type")) false
 (** Optimization of cuts *)
 
 let mkfType c = match kind_of_term c with
-| App (i, args) ->
-  if Array.length args = 2 && Term.isConstruct i then args.(1)
-  else mkProj (ptype, c)
+| App (i, args) when Term.isConstruct i -> args.(1)
 | _ ->
   mkProj (ptype, c)
 
@@ -85,6 +83,9 @@ type forcing_context = {
 
 let pos_name = Name (Id.of_string "p")
 let hom_name = Name (Id.of_string "α")
+let eql_name = Name (Id.of_string "e")
+let lft_name = Name (Id.of_string "e₀")
+let rgt_name = Name (Id.of_string "e₁")
 
 let dummy = mkProp
 
@@ -161,7 +162,16 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let tpe = mkApp (mkIndU pi, [| mkRel 2 |]) in
   let lam = it_mkLambda_or_LetIn tpe ext0 in
   let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
-  let lam = mkApp (mkConstructU pc, [| last; lam |]) in
+  let path =
+    let h = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 lam, [| mkRel 2; mkRel 1 |])) ext0 in
+    let args = [
+      (rgt_name, None, Vars.lift 2 h);
+      (lft_name, None, Vars.lift 1 h);
+      (eql_name, None, h);
+    ] in
+    it_mkLambda_or_LetIn mkProp args
+  in
+  let lam = mkApp (mkConstructU pc, [| last; lam; path |]) in
   (sigma, lam)
 | Cast (c, k, t) ->
   let (sigma, c_) = otranslate env fctx sigma c in
@@ -182,7 +192,16 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let ans = mkProd (na, t_, u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
   let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
-  let lam = mkApp (mkConstructU pc, [| last; lam |]) in
+  let path =
+    let h = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 lam, [| mkRel 2; mkRel 1 |])) ext0 in
+    let args = [
+      (rgt_name, None, Vars.lift 2 h);
+      (lft_name, None, Vars.lift 1 h);
+      (eql_name, None, h);
+    ] in
+    it_mkLambda_or_LetIn mkProp args
+  in
+  let lam = mkApp (mkConstructU pc, [| last; lam; path |]) in
   (sigma, lam)
 | Lambda (na, t, u) ->
   (** Translation of t *)

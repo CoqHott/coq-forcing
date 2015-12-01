@@ -59,6 +59,7 @@ let force_tac c =
     let env = Proofview.Goal.env gl in
     let sigma = Proofview.Goal.sigma gl in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
+    let () = Pp.msg_info (Termops.print_constr ans) in
     let sigma, _ = Typing.type_of env sigma ans in
     Proofview.Unsafe.tclEVARS sigma <*>
     Tactics.letin_tac None Names.Name.Anonymous ans None Locusops.allHyps

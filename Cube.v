@@ -13,4 +13,9 @@ Set Universe Polymorphism.
 
 Record CType@{i} p := cType {
   type : forall p0 (α : p ≤ p0), Type@{i};
+  path :
+    (forall p0 (α : p ≤ p0), type p0 α) ->
+    (forall p0 (α : p ≤ p0), type p0 α) ->
+    (forall p0 (α : p ≤ p0), type p0 α) ->
+    Type@{i};
 }.
