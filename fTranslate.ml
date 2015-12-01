@@ -58,6 +58,9 @@ let cube_eps = mkConst (Constant.make2 cube (Label.make "ε"))
 let cube_dt0 = mkConst (Constant.make2 cube (Label.make "δ₀"))
 let cube_dt1 = mkConst (Constant.make2 cube (Label.make "δ₁"))
 
+let cube_mkType = Constant.make2 cube (Label.make "mkTypeᶠ")
+let cube_mkProd = Constant.make2 cube (Label.make "mkProdᶠ")
+
 (** Optimization of cuts *)
 
 let mkfType c = match kind_of_term c with
@@ -191,15 +194,9 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   (sigma, ans)
 | Sort s ->
   let last = mkRel (last_condition fctx) in
-  let ofctx = fctx in
-  let (ext0, fctx) = extend fctx in
-  let (sigma, pi) = Evd.fresh_inductive_instance env sigma cType in
-  let tpe = mkApp (mkIndU pi, [| mkRel 2 |]) in
-  let lam = it_mkLambda_or_LetIn tpe ext0 in
-  let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
-  let path = mkPath ofctx lam mkProp in
-  let lam = mkApp (mkConstructU pc, [| last; lam; path |]) in
-  (sigma, lam)
+  let (sigma, pc) = Evd.fresh_constant_instance env sigma cube_mkType in
+  let s = mkApp (mkConstU pc, [| last |]) in
+  (sigma, s)
 | Cast (c, k, t) ->
   let (sigma, c_) = otranslate env fctx sigma c in
   let (sigma, t_) = otranslate_type env fctx sigma t in
@@ -207,22 +204,26 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   (sigma, ans)
 | Prod (na, t, u) ->
   let last = mkRel (last_condition fctx) in
-  let ofctx = fctx in
-  let (ext0, fctx) = extend fctx in
   (** Translation of t *)
   let (ext, tfctx) = extend fctx in
-  let (sigma, t_) = otranslate_type env tfctx sigma t in
-  let t_ = it_mkProd_or_LetIn t_ ext in
+  let (sigma, t_) = otranslate env tfctx sigma t in
+  let t_ = it_mkLambda_or_LetIn t_ ext in
   (** Translation of u *)
+  let (ext, fctx) = extend fctx in
   let ufctx = add_variable fctx in
-  let (sigma, u_) = otranslate_type env ufctx sigma u in
+  let (sigma, u_) = otranslate env ufctx sigma u in
+  let (sigma, arg) =
+    let (ext, fctx) = extend fctx in
+    let (sigma, arg) = otranslate_type env fctx sigma t in
+    let arg = it_mkProd_or_LetIn arg ext in
+    (sigma, arg)
+  in
+  let u_ = mkLambda (na, arg, u_) in
+  let u_ = it_mkLambda_or_LetIn u_ ext in
   (** Result *)
-  let ans = mkProd (na, t_, u_) in
-  let lam = it_mkLambda_or_LetIn ans ext0 in
-  let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
-  let path = mkPath ofctx lam mkProp in
-  let lam = mkApp (mkConstructU pc, [| last; lam; path |]) in
-  (sigma, lam)
+  let (sigma, pc) = Evd.fresh_constant_instance env sigma cube_mkProd in
+  let prd = mkApp (mkConstU pc, [| last; t_; u_ |]) in
+  (sigma, prd)
 | Lambda (na, t, u) ->
   (** Translation of t *)
   let (ext, tfctx) = extend fctx in
