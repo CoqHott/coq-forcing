@@ -11,3 +11,5 @@ Test.v
 Sigma.v
 Bool.v
 Nat.v
+Eq.v
+

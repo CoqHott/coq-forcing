@@ -38,6 +38,7 @@ intros p A P σ.
 refine ((σ p #).(_proj1_ p A _ p #) p #).
 Defined.
 
+(*
 Forcing Definition proj2 : forall A P (σ : sig A P), P (proj1 A P σ) using Obj Hom.
 Proof.
 intros p A P σ.
@@ -51,5 +52,6 @@ eapply ((σ p #).(_proj2_ _ _ _ _ _) p #).
 eapply _proj2_.
 
 Abort.
+*)
 
 End Sigma.
