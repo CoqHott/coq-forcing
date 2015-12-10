@@ -60,3 +60,5 @@ Eval compute in ᶠbar.
 Eval compute in ᶠqux.
 
 Fail Check (eq_refl : ᶠbar = ᶠqux).
+
+End Nat.
