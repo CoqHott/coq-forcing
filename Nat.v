@@ -35,17 +35,24 @@ Defined.
 
 Forcing Definition nat_rec : forall (P : Type), P -> (P -> P) -> nat -> P using Obj Hom.
 Proof.
-intros p P H0 HS n.
-cut (forall q (f : p ≤ q), P q f q #).
-{ intros X. apply X. }
+  intros p P H0 HS n. compute in *.
 
-intros q f.
-specialize (n q f).
-compute in *.
-induction n.
-+ exact (H0 p0 f).
-+ apply HS; intros p1 α1.
-  apply (X p1 α1).
+  exact ((fix F (p' : Obj)
+              (P :  forall p0 : Obj, p' ≤ p0 -> forall p : Obj, p0 ≤ p -> Type)
+              (H0 : forall (p0 : Obj) (α : p' ≤ p0), P p0 α p0 #)
+              (HS:  forall (p0 : Obj) (α : p' ≤ p0),
+                    (forall (p : Obj) (α0 : p0 ≤ p), P p (α ∘ α0) p #) -> P p0 α p0 #)
+              (n : nat_ p') {struct n} : P p' # p' # :=
+            match n with
+            | O_ _ =>    H0 p' #
+            | S_ _ n0 => HS p' #
+                   (fun (p1 : Obj) (α1 : p' ≤ p1) =>
+                      F p1
+                        (fun p1 f1 => P  p1 (α1 ∘ f1))
+                        (fun p1 f1 => H0 p1 (α1 ∘ f1))
+                        (fun p1 f1 => HS p1 (α1 ∘ f1))
+                        (n0 p1 α1))
+            end) p P H0 HS (n p #)).
 Defined.
 
 Definition foo := fun (P : Type) (H0 : P) (HS : P -> P) => nat_rec P H0 HS O.
@@ -59,6 +66,6 @@ Forcing Translate qux using Obj Hom.
 Eval compute in ᶠbar.
 Eval compute in ᶠqux.
 
-Fail Check (eq_refl : ᶠbar = ᶠqux).
+Check (eq_refl : ᶠbar = ᶠqux).
 
 End Nat.
