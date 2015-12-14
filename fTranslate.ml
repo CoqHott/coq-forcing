@@ -140,7 +140,10 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 | Sort s ->
   let (ext0, fctx) = extend fctx in
   let (ext, fctx) = extend fctx in
-  let (sigma, s') = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
+  let (sigma, s') =
+    if Sorts.is_prop s then (sigma, Sorts.prop)
+    else Evd.new_sort_variable Evd.univ_flexible_alg sigma
+  in
   let sigma = Evd.set_leq_sort env sigma s s' in
   let tpe = it_mkProd_or_LetIn (mkSort s') ext in
   let lam = it_mkLambda_or_LetIn tpe ext0 in

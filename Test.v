@@ -25,11 +25,13 @@ Definition foo := fun A (x : A) => x.
 Definition bar := foo (foo (forall A : Type, A -> A) (fun A (x : A) => x) Type Type).
 Definition qux := (fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A).
 Definition quz := Type -> Type.
+Definition eq := fun (A : Type) (x y : A) => forall (P : A -> Prop), P x -> P y.
 
 Forcing Translate foo using Obj Hom.
 Forcing Translate bar using Obj Hom.
 Forcing Translate qux using Obj Hom.
 Forcing Translate quz using Obj Hom.
+Forcing Translate eq using Obj Hom.
 
 Print ᶠfoo.
 Print ᶠbar.
