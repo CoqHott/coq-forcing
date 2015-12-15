@@ -32,7 +32,7 @@ Definition mkProdᶠ@{i j k} p
   (B : forall p0 (α : p ≤ p0), (forall p1 (α0 : p0 ≤ p1), (A p1 (α ∘ α0)).(type _) p1 #) -> Typeᶠ@{j} p0)
   : Typeᶠ@{k} p.
 Proof.
-refine (cType@{i} p _ _).
+refine (cType@{k} p _ _).
 + refine (fun p0 α => forall x : (forall p1 α0, (A p1 (α ∘ α0)).(type _) p1 #), (B p0 α x).(type _) p0 #).
 + intros.
   exact Prop.
