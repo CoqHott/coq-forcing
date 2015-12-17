@@ -82,14 +82,17 @@ Forcing Definition nat_rect : forall (P : nat -> Type),
     forall n : nat, nat_mem _ n P using Obj Hom.
 Proof.
   intros p P H0 HS n. unfold ᶠnat_mem, ᶠnat_rec . set (n0 := n p #). clearbody n0; clear n.
-  exact ((fix F p 
-              (P : forall p0 : Obj,
+
+  (* avoiding noise in the actual definition *)
+  (* may be improved using LTac ? *)
+  
+  set (Type_of_P := fun p => forall p0 : Obj,
                   p ≤ p0 ->
                   (forall p : Obj, p0 ≤ p -> ᶠnat p p #) ->
-                  forall p : Obj, p0 ≤ p -> Type)
-              (H0 : forall (p0 : Obj) (α : p ≤ p0),
-       P p0 (# ∘ (α ∘ #)) (fun (p : Obj) (_ : p0 ≤ p) => ᶠO p) p0 #)
-              (HS :forall (p0 : Obj) (α : p ≤ p0)
+                  forall p : Obj, p0 ≤ p -> Type).
+  set (Type_of_H0 := fun p (P:Type_of_P p) => forall (p0 : Obj) (α : p ≤ p0),
+       P p0 (# ∘ (α ∘ #)) (fun (p : Obj) (_ : p0 ≤ p) => ᶠO p) p0 #).
+  set (Type_of_HS := fun p (P:Type_of_P p) => forall (p0 : Obj) (α : p ≤ p0)
          (n : forall p : Obj, p0 ≤ p -> ᶠnat p p #),
        (forall (p1 : Obj) (α0 : p0 ≤ p1),
         ᶠnat_mem p1
@@ -107,16 +110,49 @@ Proof.
             (fun (p1 : Obj) (α1 : p ≤ p1) => n p1 (# ∘ (α0 ∘ (α1 ∘ #)))))
          (fun (p1 : Obj) (α0 : p0 ≤ p1) =>
           P p1 (α ∘ α0)) p0 
-         #)
-              (n0 : ᶠnat p p #) : nat_rec_ p
+         #).
+  set (Type_of_Goal := fun p (P:Type_of_P p) (H0:Type_of_H0 p P) (HS:Type_of_HS p P) n0 => nat_rec_ p
      (fun (p0 : Obj) (_ : p ≤ p0) (p1 : Obj) (_ : p0 ≤ p1) =>
       (forall p2 : Obj,
        p1 ≤ p2 ->
        (forall p3 : Obj, p2 ≤ p3 -> ᶠnat p3 p3 #) ->
        forall p3 : Obj, p2 ≤ p3 -> Type) ->
-      forall p2 : Obj, p1 ≤ p2 -> Type) _ _ n0
+      forall p2 : Obj, p1 ≤ p2 -> Type)
+     (fun (p0 : Obj) (_ : p ≤ p0)
+        (f : forall p1 : Obj,
+             p0 ≤ p1 ->
+             (forall p2 : Obj, p1 ≤ p2 -> ᶠnat p2 p2 #) ->
+             forall p2 : Obj, p1 ≤ p2 -> Type) =>
+      f p0 # (fun (p1 : Obj) (_ : p0 ≤ p1) => ᶠO p1))
+     (fun (p0 : Obj) (_ : p ≤ p0)
+        (H : forall p1 : Obj,
+             p0 ≤ p1 ->
+             (forall p2 : Obj,
+              p1 ≤ p2 ->
+              (forall p3 : Obj, p2 ≤ p3 -> ᶠnat p3 p3 #) ->
+              forall p3 : Obj, p2 ≤ p3 -> Type) ->
+             forall p2 : Obj, p1 ≤ p2 -> Type)
+        (f : forall p1 : Obj,
+             p0 ≤ p1 ->
+             (forall p2 : Obj, p1 ≤ p2 -> ᶠnat p2 p2 #) ->
+             forall p2 : Obj, p1 ≤ p2 -> Type) =>
+      H p0 #
+        (fun (p1 : Obj) (α0 : p0 ≤ p1)
+           (n : forall p2 : Obj, p1 ≤ p2 -> ᶠnat p2 p2 #) =>
+         f p1 (fun (R : Obj) (k : Hom p1 R) => α0 R k)
+           (fun (p2 : Obj) (α1 : p1 ≤ p2) =>
+            ᶠS p2 (fun (p3 : Obj) (α2 : p2 ≤ p3) => n p3 (α1 ∘ α2))))) n0
      (fun (p0 : Obj) (α : p ≤ p0) =>
-      P p0 (fun (R : Obj) (k : Hom p0 R) => α R k)) p #
+      P p0 (fun (R : Obj) (k : Hom p0 R) => α R k)) p 
+     #).
+
+  (* Now the definition using a fixpoint *)
+  
+  exact ((fix F p 
+              (P : Type_of_P p)
+              (H0 : Type_of_H0 p P)
+              (HS : Type_of_HS p P)
+              (n0 : ᶠnat p p #) : Type_of_Goal p P H0 HS n0
              := match n0 with
             | O_ _ =>   H0 p #
             | S_ _ n => HS p # n
