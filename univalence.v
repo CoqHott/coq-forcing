@@ -88,22 +88,25 @@ Proof.
   apply apD10_ in H. specialize (H q). apply apD10_ in H. exact (H #).
 Qed.
 
-Forcing Definition neg_propext : univalence -> Empty using Obj Hom.
+Forcing Definition neg_univ : univalence -> Empty using Obj Hom.
 Proof.
   intros p huniv.
+
+  (* Definition of the equivalence function and its inverse *)
+
   refine (let f := _ : forall (p0 : Obj) (α : p ≤ p0),
                  (forall (p1 : Obj) (α0 : p0 ≤ p1),
-                  A₀ p p1 (# ∘ (# ∘ (α ∘ (# ∘ (α0 ∘ #))))) p1 #) ->
-                 A₁ p p0 (# ∘ (α ∘ (# ∘ #))) p0 # in _).
+                  A₀ p p1 (α ∘ α0) p1 #) ->  A₁ p p0 α p0 # in _).
   intros. specialize (H (neg p0) (fun _ _ => tt)). destruct p0; exact H.
   refine (let g := _ : forall (p0 : Obj) (α : p ≤ p0),
              (forall (p1 : Obj) (α0 : p0 ≤ p1),
-                  A₁ p p1 (# ∘ (# ∘ (α ∘ (# ∘ (α0 ∘ #))))) p1 #) ->
-                 A₀ p p0 (# ∘ (# ∘ (# ∘ (α ∘ (# ∘ #))))) p0 # in _).
+                  A₁ p p1 (α ∘ α0) p1 #) ->  A₀ p p0 α p0 # in _).
   intros. specialize (H (neg p0) (fun _ _ => tt)). destruct p0; exact H.
 
   specialize (huniv p # (A₀ p) (A₁ p) f g).
   
+  (* Proof of False using A₀ = A₁ *)
+
   apply apD10_ in huniv. specialize (huniv p).
   apply apD10_ in huniv. specialize (huniv #).
   apply apD10_ in huniv. specialize (huniv p). 
@@ -113,6 +116,8 @@ Proof.
   symmetry in huniv.
   exact ((fun X => match huniv in _ = X return X with eq_refl => I end) False).  
 
+  (* Dealing with section and retraction *)
+  
   compute. intros. apply funext_. intro p1. apply funext_. intro α0.
   assert ((fun (R : bool) (_ : Hom true R) => α0 R tt) = α0).
   apply funext_. intro p2. apply funext_. intro α1. destruct α1. reflexivity.
