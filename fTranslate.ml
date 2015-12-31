@@ -196,7 +196,16 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   apply_global env sigma (IndRef i) u fctx
 | Construct (c, u) ->
   apply_global env sigma (ConstructRef c) u fctx
-| Case (ci, c, r, p) -> assert false
+| Case (ci, c, r, p) ->
+   let (sigma, c_) = otranslate env fctx sigma c in
+   let (sigma, r_) = otranslate_type env fctx sigma r in
+   let fold sigma u =
+    let (sigma, u_) = otranslate env fctx sigma u in
+    (sigma, u_)
+   in
+   let (sigma, p_) = CList.fold_map fold sigma (Array.to_list p) in
+   let p_ = Array.of_list p_ in
+   (sigma, mkCase (ci, c_, r_, p_))
 | Fix f -> assert false
 | CoFix f -> assert false
 | Proj (p, c) -> assert false
