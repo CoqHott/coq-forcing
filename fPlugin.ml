@@ -71,7 +71,7 @@ let force_translate_constant cat cst id =
   let sigma = Evd.from_env env in
   let (sigma, typ) = FTranslate.translate_type !translator cat env sigma typ in
   let sigma, _ = Typing.type_of env sigma typ in
-  let uctx = Evd.evar_universe_context sigma in
+  let _uctx = Evd.evar_universe_context sigma in
   (** Define the term by tactic *)
   let body = Option.get (Global.body_of_constant cst) in
   let (sigma, body) = FTranslate.translate !translator cat env sigma body in
@@ -94,7 +94,7 @@ let force_translate_inductive cat ind =
   let env = Global.env () in
   let (mib, _) = Global.lookup_inductive ind in
   (** For each block in the inductive we build the translation *)
-  let make_one_entry body (sigma, bodies_) =
+  let make_one_entry params body (sigma, bodies_) =
     let template = match body.mind_arity with
     | RegularArity _ -> false
     | TemplateArity _ -> true
@@ -107,18 +107,31 @@ let force_translate_inductive cat ind =
     let (sigma, arity) =
       let nindexes = List.length body.mind_arity_ctxt - List.length mib.mind_params_ctxt in
       let ctx = List.firstn nindexes body.mind_arity_ctxt in
-      let env' = Environ.push_rel_context mib.mind_params_ctxt env in
+      let _env' = Environ.push_rel_context mib.mind_params_ctxt env in
       let a = it_mkProd_or_LetIn s ctx in
-      FTranslate.translate_type ~toplevel:false !translator cat env' sigma a
+      (sigma, a)
+      (* FTranslate.translate_type ~toplevel:false !translator cat env' sigma a *)
+    in
+    let substind =
+      it_mkLambda_or_LetIn (mkApp (mkRel 5, [| mkRel 4 |]))
+			   (List.init 4 (fun _ -> (Names.Anonymous, None, mkProp)))
     in
     let fold_lc typ (sigma, lc_) =
       (** We exploit the fact that the translation actually does not depend on
           the rel_context of the environment except for its length. *)
-      let self = List.init (Array.length mib.mind_packets) (fun _ -> (Name.Anonymous, None, mkProp)) in
+      let self = List.init (Array.length mib.mind_packets) (fun _ -> (Name.Anonymous, None,
+								      it_mkProd_or_LetIn arity params)) in
       let env' = Environ.push_rel_context self env in
       let (sigma, typ_) = FTranslate.translate_type ~toplevel:false ~lift:1 !translator cat env' sigma typ in
       (** The translation assumes that the first introduced variable is the
           toplevel forcing condition, which is not the case here. *)
+      let typ_ = Vars.substnl [substind] 2 typ_ in
+      let typ_ = Reductionops.nf_beta Evd.empty typ_ in
+      let typ_ = Vars.substnl [mkRel 1] 0 typ_ in
+      let envparams = Environ.push_rel_context params env' in
+      let sigma, ty = Typing.type_of envparams sigma typ_ in
+      let sigma, b = Reductionops.infer_conv ~pb:Reduction.CUMUL envparams sigma ty s in
+      assert b;
       (sigma, typ_ :: lc_)
     in
     let (sigma, lc_) = Array.fold_right fold_lc body.mind_user_lc (sigma, []) in
@@ -139,7 +152,7 @@ let force_translate_inductive cat ind =
   in
   let sigma = Evd.from_env env in
   let (sigma, params_) = FTranslate.translate_context !translator cat env sigma mib.mind_params_ctxt in
-  let (sigma, bodies_) = Array.fold_right make_one_entry mib.mind_packets (sigma, []) in
+  let (sigma, bodies_) = Array.fold_right (make_one_entry params_) mib.mind_packets (sigma, []) in
   let debug b =
     msg_info (Nameops.pr_id b.mind_entry_typename ++ str " : " ++ Termops.print_constr (it_mkProd_or_LetIn b.mind_entry_arity params_));
     let cs = List.combine b.mind_entry_consnames b.mind_entry_lc in
