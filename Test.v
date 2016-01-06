@@ -42,6 +42,23 @@ Forcing Translate unit using Obj Hom.
 Forcing Translate list using Obj Hom.
 Forcing Translate sum using Obj Hom.
 
+Scheme ᶠnat_rect := Induction for ᶠnat Sort Type.
+
+Lemma idfnat (p q : Obj) f (f' : ᶠnat q p f) : ᶠnat q p f.
+Proof.
+  induction f'.
+  constructor.
+  constructor.
+Defined.  
+
+Forcing Definition idn : nat -> nat using Obj Hom.
+Proof.
+  intros.
+  specialize (X p #).
+  apply idfnat.
+  apply X.
+Defined.  
+
 (** Define a term directly in the forcing layer. *)
 
 Forcing Definition sum : Type -> Type -> Type using Obj Hom.
