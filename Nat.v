@@ -16,8 +16,7 @@ Inductive nat_ (p : Obj) : Type :=
 
 Forcing Definition nat : Type using Obj Hom.
 Proof.
-intros p q f.
-exact (nat_ q).
+exact (fun p q f => nat_ q).
 Defined.
 
 Forcing Definition O : nat using Obj Hom.
@@ -29,6 +28,10 @@ Forcing Definition S : nat -> nat using Obj Hom.
 Proof.
   exact S_. 
 Defined.
+
+(* Forcing Translate bool using Obj Hom. *)
+
+(* Forcing Definition nat_rec : forall b:bool, match b with true => unit | false => unit end using Obj Hom. *)
 
 Fixpoint nat_rec_ (p : Obj)
   (P : forall p0 : Obj, p ≤ p0 -> forall p : Obj, p0 ≤ p -> Type)
@@ -153,7 +156,7 @@ Proof.
               (H0 : Type_of_H0 p P)
               (HS : Type_of_HS p P)
               (n0 : ᶠnat p p #) : Type_of_Goal p P H0 HS n0
-             := match n0 with
+             := match n0 as n1 return Type_of_Goal p P H0 HS n1 with
             | O_ _ =>   H0 p #
             | S_ _ n => HS p # n
                    (fun (p1 : Obj) (α1 : p ≤ p1) =>
@@ -162,7 +165,7 @@ Proof.
                         (fun p1 f1 => H0 p1 (α1 ∘ f1))
                         (fun p1 f1 => HS p1 (α1 ∘ f1))
                         (n p1 α1)) end
-          ) p P H0 HS n0).
+         ) p P H0 HS n0).
 Defined.
 
 

@@ -9,29 +9,27 @@ Notation "P ≤ Q" := (forall R, Hom Q R -> Hom P R) (at level 70).
 Notation "#" := (fun (R : Obj) (k : Hom _ R) => k).
 Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40).
 
-
-Inductive list_ (p : Obj) (A : forall q (f : p ≤ q), Type) : Type :=
-| nil_  : list_ p A
-| cons_ : (forall q f, A q f) ->
-          (forall q (f : p ≤ q), list_ q (fun r g => A r (f ∘ g))) ->
+Inductive list_ (p : Obj) (A : forall q (f : p ≤ q) r (g : q ≤ r), Type) :
+  Type :=
+| nil_  : list_ p A 
+| cons_ : (forall q f, A q f q #) ->
+          (forall q (f : p ≤ q), list_ q (fun r g s h => A r (f ∘ g) s h)) ->
           list_ p A.
 
 Forcing Definition list : Type -> Type using Obj Hom.
 Proof.
-  intros p A q f.
-  exact (list_ q (fun r g => A r (f ∘ g) r #)).
+  exact (fun p A q f => list_ q (fun r g => A r (f ∘ g))). 
 Defined.
 
 Forcing Definition nil : forall A, list A using Obj Hom.
 Proof.
-  intros p A.
-  exact (nil_ p (fun r g => A r g r #)). 
+  (* eta expansion for pb with universes *)
+  exact (fun p A => nil_ p A).
 Defined.
 
 Forcing Definition cons : forall A, A -> list A -> list A using Obj Hom.
 Proof.
-  intros p A x l.
-  exact (cons_ p (fun r g => A r g r #) x l). 
+  exact (fun p A x l => cons_ p A x l). 
 Defined.
 
 Fixpoint list_rec_ p
@@ -92,13 +90,13 @@ Proof.
   (* avoiding noise in the actual definition *)
   (* may be improved using LTac ? *)
   
-  pose (Type_of_A := fun p => forall p0 : Obj, p ≤ p0 -> forall p : Obj, p0 ≤ p -> Type).
+  pose (Type_of_A := fun p => forall p0 : Obj, p ≤ p0 -> forall p : Obj, p0 ≤ p -> Type). 
   pose (Type_of_P := fun p (A : Type_of_A p) => forall (p0 : Obj) (α : p ≤ p0),
-                  (forall (p : Obj) (α0 : p0 ≤ p),
-                      list_ p
-                            (fun (r : Obj) (g : p ≤ r) =>
-                               A r (fun (R : Obj) (k : Hom r R) => α R (α0 R (g R k))) r #)) ->
-                  forall p : Obj, p0 ≤ p -> Type).
+      (forall (p : Obj) (α0 : p0 ≤ p),
+       list_ p
+         (fun (r : Obj) (g : p ≤ r) =>
+          A r (fun (R : Obj) (k : Hom r R) => α R (α0 R (g R k))))) ->
+      forall p : Obj, p0 ≤ p -> Type).
   pose (Type_of_Hnil := fun p (A : Type_of_A p) (P : Type_of_P p A) =>
                           forall (p0 : Obj) (α : p ≤ p0),
          P p0 (fun (R : Obj) (k : Hom p0 R) => α R k)
