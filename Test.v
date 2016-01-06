@@ -37,11 +37,10 @@ Print ᶠfoo.
 Print ᶠbar.
 Print ᶠqux.
 Print ᶠquz.
-Set Printing All.
 Forcing Translate nat using Obj Hom.
 Forcing Translate unit using Obj Hom.
-Fail Forcing Translate list using Obj Hom.
-Fail Forcing Translate sum using Obj Hom.
+Forcing Translate list using Obj Hom.
+Forcing Translate sum using Obj Hom.
 
 (** Define a term directly in the forcing layer. *)
 

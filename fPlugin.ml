@@ -21,8 +21,11 @@ let translator : FTranslate.translator ref =
 
 type translator_obj = (global_reference * global_reference) list
 
+let add_translator translator l =
+  List.fold_left (fun accu (src, dst) -> Refmap.add src dst accu) translator l
+							    
 let cache_translator (_, l) =
-  translator := List.fold_left (fun accu (src, dst) -> Refmap.add src dst accu) !translator l
+  translator := add_translator !translator l
 
 let load_translator _ l = cache_translator l
 let open_translator _ l = cache_translator l
@@ -85,6 +88,24 @@ let force_translate_constant cat cst id =
   let cst = Declare.declare_constant id decl in
   ConstRef cst
 
+let eta_reduce c =
+  let rec aux c =
+    match kind_of_term c with
+    | Lambda (n, t, b) ->
+       let rec eta b =
+	 match kind_of_term b with
+	 | App (f, args) ->
+	    if isRelN 1 (Array.last args) then
+	      let args', _ = Array.chop (Array.length args - 1) args in
+	      if Array.for_all (Vars.noccurn 1) args' then Vars.subst1 mkProp (mkApp (f, args'))
+	      else let b' = aux b in if Term.eq_constr b b' then c else eta b'
+	    else let b' = aux b in if Term.eq_constr b b' then c else eta b'
+	 | _ -> let b' = aux b in
+	    if Term.eq_constr b' b then c else eta b'
+       in eta b
+    | _ -> map_constr aux c
+  in aux c
+
 let force_translate_inductive cat ind =
   (** From a kernel inductive body construct an entry for the inductive. There
       are slight mismatches in the representation, in particular in the handling
@@ -93,7 +114,16 @@ let force_translate_inductive cat ind =
   let open Entries in
   let env = Global.env () in
   let (mib, _) = Global.lookup_inductive ind in
+  let nparams = List.length mib.mind_params_ctxt in
   (** For each block in the inductive we build the translation *)
+  let substind =
+    Array.to_list
+    (Array.map (fun oib -> (oib.mind_typename, None,
+			    Inductive.type_of_inductive env ((mib, oib), Univ.Instance.empty)))
+	       mib.mind_packets)
+  in
+  let invsubst = List.map pi1 substind in
+  let translator = add_translator !translator (List.map (fun id -> VarRef id, VarRef id) invsubst) in
   let make_one_entry params body (sigma, bodies_) =
     let template = match body.mind_arity with
     | RegularArity _ -> false
@@ -105,42 +135,40 @@ let force_translate_inductive cat ind =
       else (sigma, mkProp)
     in
     let (sigma, arity) =
-      let nindexes = List.length body.mind_arity_ctxt - List.length mib.mind_params_ctxt in
+      let nindexes = List.length body.mind_arity_ctxt - nparams in
       let ctx = List.firstn nindexes body.mind_arity_ctxt in
-      let _env' = Environ.push_rel_context mib.mind_params_ctxt env in
+      let env' = Environ.push_rel_context mib.mind_params_ctxt env in
       let a = it_mkProd_or_LetIn s ctx in
-      (sigma, a)
-      (* FTranslate.translate_type ~toplevel:false !translator cat env' sigma a *)
+      FTranslate.translate_type ~toplevel:false translator cat env' sigma a
     in
-    let substind =
-      it_mkLambda_or_LetIn (mkApp (mkRel 5, [| mkRel 4 |]))
-			   (List.init 4 (fun _ -> (Names.Anonymous, None, mkProp)))
-    in
-    let fold_lc typ (sigma, lc_) =
+    let fold_lc (sigma, lc_) typ =
       (** We exploit the fact that the translation actually does not depend on
           the rel_context of the environment except for its length. *)
-      let self = List.init (Array.length mib.mind_packets) (fun _ -> (Name.Anonymous, None,
-								      it_mkProd_or_LetIn arity params)) in
-      let env' = Environ.push_rel_context self env in
-      let (sigma, typ_) = FTranslate.translate_type ~toplevel:false ~lift:1 !translator cat env' sigma typ in
+      let env' = Environ.push_named_context substind env in
+      let envtr = Environ.push_rel_context (snd (CList.sep_last params)) env' in
+      let typ = snd (decompose_prod_n nparams typ) in
+      let typ = Vars.substnl (List.map mkVar invsubst) nparams typ in
+      let (sigma, typ_) =
+	FTranslate.translate_type ~toplevel:false (* ~lift:nparams *) translator cat envtr sigma typ in
       (** The translation assumes that the first introduced variable is the
           toplevel forcing condition, which is not the case here. *)
-      let typ_ = Vars.substnl [substind] 2 typ_ in
       let typ_ = Reductionops.nf_beta Evd.empty typ_ in
-      let typ_ = Vars.substnl [mkRel 1] 0 typ_ in
-      let envparams = Environ.push_rel_context params env' in
-      let sigma, ty = Typing.type_of envparams sigma typ_ in
-      let sigma, b = Reductionops.infer_conv ~pb:Reduction.CUMUL envparams sigma ty s in
+      let typ_ = Vars.substn_vars (List.length params + 1) invsubst typ_ in
+      let envtyp_ = Environ.push_rel_context [Name (Nameops.add_suffix body.mind_typename "_f"),None,
+					      it_mkProd_or_LetIn arity params] env in
+      let envtyp_ = Environ.push_rel_context params envtyp_ in
+      let sigma, ty = Typing.type_of envtyp_ sigma typ_ in
+      let sigma, b = Reductionops.infer_conv ~pb:Reduction.CUMUL envtyp_ sigma ty s in
       assert b;
-      (sigma, typ_ :: lc_)
+      (sigma, eta_reduce typ_ :: lc_)
     in
-    let (sigma, lc_) = Array.fold_right fold_lc body.mind_user_lc (sigma, []) in
+    let (sigma, lc_) = Array.fold_left fold_lc (sigma, []) body.mind_user_lc in
     let body_ = {
       mind_entry_typename = translate_name body.mind_typename;
       mind_entry_arity = arity;
       mind_entry_template = template;
       mind_entry_consnames = CArray.map_to_list translate_name body.mind_consnames;
-      mind_entry_lc = lc_;
+      mind_entry_lc = List.rev lc_;
     } in
     (sigma, body_ :: bodies_)
   in
@@ -151,7 +179,7 @@ let force_translate_inductive cat ind =
   | Some (Some (id, _, _)) -> Some (Some (translate_name id))
   in
   let sigma = Evd.from_env env in
-  let (sigma, params_) = FTranslate.translate_context !translator cat env sigma mib.mind_params_ctxt in
+  let (sigma, params_) = FTranslate.translate_context translator cat env sigma mib.mind_params_ctxt in
   let (sigma, bodies_) = Array.fold_right (make_one_entry params_) mib.mind_packets (sigma, []) in
   let debug b =
     msg_info (Nameops.pr_id b.mind_entry_typename ++ str " : " ++ Termops.print_constr (it_mkProd_or_LetIn b.mind_entry_arity params_));
