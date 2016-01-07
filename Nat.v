@@ -11,30 +11,6 @@ Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40)
 
 Forcing Translate nat using Obj Hom.
 
-(* Inductive nat_ (p : Obj) : forall q (f : p ≤ q), Type := *)
-(* | O_ : nat_ p p # *)
-(* | S_ : (forall q (f : p ≤ q), nat_ q q #) -> nat_ p p #. *)
-
-(* Forcing Definition nat : Type using Obj Hom. *)
-(* Proof. *)
-(*   exact nat_.  *)
-(*   (* exact (fun p q f => nat_ p q f). *) *)
-(* Defined. *)
-
-Forcing Definition O' : nat using Obj Hom.
-Proof.
-  exact ᶠO. 
-Defined.
-
-Forcing Definition S' : nat -> nat using Obj Hom.
-Proof.
-  exact ᶠS. 
-Defined.
-
-(* Forcing Translate bool using Obj Hom. *)
-
-(* Forcing Definition nat_rec : forall b:bool, match b with true => unit | false => unit end using Obj Hom. *)
-
 Fixpoint nat_rec_ (p : Obj)
   (P : forall p0 : Obj, p ≤ p0 -> forall p : Obj, p0 ≤ p -> Type)
   (H0 : forall (p0 : Obj) (α : p ≤ p0),
@@ -61,8 +37,8 @@ Proof.
   exact (nat_rec_ p P H0 HS p # (n p #)).
 Defined.
 
-Definition foo := fun (P : Type) (H0 : P) (HS : P -> P) => nat_rec P H0 HS O'.
-Definition bar := fun (P : Type) (H0 : P) (HS : P -> P) (n : nat) => nat_rec P H0 HS (S' n).
+Definition foo := fun (P : Type) (H0 : P) (HS : P -> P) => nat_rec P H0 HS O.
+Definition bar := fun (P : Type) (H0 : P) (HS : P -> P) (n : nat) => nat_rec P H0 HS (S n).
 Definition qux := fun (P : Type) (H0 : P) (HS : P -> P) (n : nat) => HS (nat_rec P H0 HS n).
 
 Forcing Translate foo using Obj Hom.
@@ -76,14 +52,14 @@ Check (eq_refl : ᶠbar = ᶠqux).
 
 Definition nat_mem : forall R, nat -> (nat -> R) -> R :=
   fun R : Type =>
-    nat_rec ((nat -> R) -> R) (fun f => f O')
-            (fun H f => H (fun n => f (S' n))).
+    nat_rec ((nat -> R) -> R) (fun f => f O)
+            (fun H f => H (fun n => f (S n))).
 
 Forcing Translate nat_mem using Obj Hom.
 
 Forcing Definition nat_rect : forall (P : nat -> Type),
-    P O' ->
-    (forall (n:nat), nat_mem _ n P -> nat_mem _ (S' n) P) ->
+    P O ->
+    (forall (n:nat), nat_mem _ n P -> nat_mem _ (S n) P) ->
     forall n : nat, nat_mem _ n P using Obj Hom.
 Proof.
 
@@ -176,11 +152,11 @@ Proof.
 Defined.
 
 
-Definition bar2 := fun (P : nat -> Type) (H0 : P O')
-    (HS : (forall (n:nat), nat_mem _ n P -> nat_mem _ (S' n) P))
-    (n : nat) => nat_rect P H0 HS (S' n).
-Definition qux2 := fun (P : nat -> Type) (H0 : P O')
-    (HS : (forall (n:nat), nat_mem _ n P -> nat_mem _ (S' n) P))
+Definition bar2 := fun (P : nat -> Type) (H0 : P O)
+    (HS : (forall (n:nat), nat_mem _ n P -> nat_mem _ (S n) P))
+    (n : nat) => nat_rect P H0 HS (S n).
+Definition qux2 := fun (P : nat -> Type) (H0 : P O)
+    (HS : (forall (n:nat), nat_mem _ n P -> nat_mem _ (S n) P))
     (n : nat) => HS n (nat_rect P H0 HS n).
 
 Forcing Translate bar2 using Obj Hom.
