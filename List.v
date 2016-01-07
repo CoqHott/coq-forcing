@@ -10,15 +10,16 @@ Notation "#" := (fun (R : Obj) (k : Hom _ R) => k).
 Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40).
 
 Inductive list_ (p : Obj) (A : forall q (f : p ≤ q) r (g : q ≤ r), Type) :
-  Type :=
-| nil_  : list_ p A 
+  forall q (f : p ≤ q), Type :=
+| nil_  : list_ p A p # 
 | cons_ : (forall q f, A q f q #) ->
-          (forall q (f : p ≤ q), list_ q (fun r g s h => A r (f ∘ g) s h)) ->
-          list_ p A.
+          (forall q (f : p ≤ q), list_ q (fun r g s h => A r (f ∘ g) s h) q #) ->
+          list_ p A p #.
 
 Forcing Definition list : Type -> Type using Obj Hom.
 Proof.
-  exact (fun p A q f => list_ q (fun r g => A r (f ∘ g))). 
+  exact list_.
+  (* exact (fun p A q f => list_ q (fun r g => A r (f ∘ g)) q #).  *)
 Defined.
 
 Forcing Definition nil : forall A, list A using Obj Hom.
@@ -41,8 +42,8 @@ Fixpoint list_rec_ p
                  ᶠlist p1 (fun (p2 : Obj) (α1 : p1 ≤ p2) =>
                              A p2 (α ∘ (α0 ∘ α1))) p1 #) ->
              (forall (p : Obj) (α0 : p0 ≤ p), P p (α ∘ α0) p #) ->
-             P p0 α p0 #)
-         (l : ᶠlist p A p #) {struct l} : P p # p # :=
+             P p0 α p0 #) q f 
+         (l : ᶠlist p A q f) {struct l} : P p # p # :=
             match l with
             | nil_ _ _ =>       Hnil p #
             | cons_ _ _ ny ll => Hcons p # ny ll
@@ -52,13 +53,13 @@ Fixpoint list_rec_ p
                         (fun p1 f1 => P     p1 (α1 ∘ f1))
                         (fun p1 f1 => Hnil  p1 (α1 ∘ f1))
                         (fun p1 f1 => Hcons p1 (α1 ∘ f1))
-                        (ll p1 α1))
+                        _ _ (ll p1 α1))
             end.
 
 Forcing Definition list_rec : forall A (P : Type), P -> (A -> list A -> P -> P) -> list A -> P using Obj Hom.
 Proof.
   intros p A P Hnil Hcons l.
-  exact (list_rec_ p A P Hnil Hcons (l p #)).
+  exact (list_rec_ p A P Hnil Hcons p # (l p #)).
 Defined.
 
 Definition bar := fun A (P : Type) (H0 : P) (HS : A -> list A -> P -> P) (x : A) (l : list A) => list_rec A P H0 HS (cons A x l).
@@ -85,18 +86,18 @@ Forcing Definition list_rect : forall A (P : list A -> Type),
     (forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons _ a l) P) ->
     forall l : list A, list_mem _ _ l P using Obj Hom.
 Proof.
-  intros p A P Hnil Hcons l.
+  simpl; intros p A P Hnil Hcons l. 
 
   (* avoiding noise in the actual definition *)
   (* may be improved using LTac ? *)
   
   pose (Type_of_A := fun p => forall p0 : Obj, p ≤ p0 -> forall p : Obj, p0 ≤ p -> Type). 
   pose (Type_of_P := fun p (A : Type_of_A p) => forall (p0 : Obj) (α : p ≤ p0),
-      (forall (p : Obj) (α0 : p0 ≤ p),
-       list_ p
-         (fun (r : Obj) (g : p ≤ r) =>
-          A r (fun (R : Obj) (k : Hom r R) => α R (α0 R (g R k))))) ->
-      forall p : Obj, p0 ≤ p -> Type).
+      (forall (p1 : Obj) (α0 : p0 ≤ p1),
+       ᶠlist p1
+         (fun (p2 : Obj) (α1 : p1 ≤ p2) =>
+          A p2 (# ∘ (α ∘ (# ∘ (α0 ∘ (α1 ∘ #)))))) p1 
+         #) -> forall p : Obj, p0 ≤ p -> Type).
   pose (Type_of_Hnil := fun p (A : Type_of_A p) (P : Type_of_P p A) =>
                           forall (p0 : Obj) (α : p ≤ p0),
          P p0 (fun (R : Obj) (k : Hom p0 R) => α R k)
@@ -137,8 +138,8 @@ Proof.
             #).
   pose (Goal_Type := fun  p (A : Type_of_A p) (P : Type_of_P p A)
               (Hnil : Type_of_Hnil p A P)
-              (Hcons : Type_of_Hcons p A P)
-              (l0 : ᶠlist p A p #) =>
+              (Hcons : Type_of_Hcons p A P) q f
+              (l0 : ᶠlist p A q f) =>
  list_rec_ p
      (fun (p0 : Obj) (α : p ≤ p0) =>
       A p0 (fun (R : Obj) (k : Hom p0 R) => α R k))
@@ -210,20 +211,23 @@ Proof.
               (fun (p3 : Obj) (α2 : p2 ≤ p3) =>
                a p3 (fun (R : Obj) (k : Hom p3 R) => α0 R (α1 R (α2 R k))))
               (fun (p3 : Obj) (α2 : p2 ≤ p3) => ll p3 (α1 ∘ α2)))))
-     l0
+     q f l0
      (fun (p0 : Obj) (α : p ≤ p0) =>
       P p0 (fun (R : Obj) (k : Hom p0 R) => α R k)) p 
      #
        ).
+
+  compute. set (l0 := l p #). clearbody l0; clear l.
+  change (Goal_Type p A P Hnil Hcons p # l0).
 
   (* Now the definition using a fixpoint *)
 
   exact ((fix F p (A : Type_of_A p) (P : Type_of_P p A)
               (Hnil : Type_of_Hnil p A P)
               (Hcons : Type_of_Hcons p A P)
-              (l0 : ᶠlist p A p #) : Goal_Type p A P Hnil Hcons l0   
+              (l0 : ᶠlist p A p #) : Goal_Type p A P Hnil Hcons p # l0   
          := 
-            match l0 with
+            match l0 as l1 return Goal_Type p A P Hnil Hcons _ _ l1 with
             | nil_ _ _ =>       Hnil p #
             | cons_ _ _ a ll => 
               Hcons p # a ll 
@@ -234,7 +238,7 @@ Proof.
                         (fun p1 f1 => Hnil  p1 (α1 ∘ f1))
                         (fun p1 f1 => Hcons p1 (α1 ∘ f1))
                         (ll p1 α1)) end
-          ) p A P Hnil Hcons (l p #)).
+          ) p A P Hnil Hcons l0).
 Defined.
 
 Definition bar2 := fun A (P : list A -> Type)
