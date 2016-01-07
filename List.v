@@ -9,28 +9,30 @@ Notation "P ≤ Q" := (forall R, Hom Q R -> Hom P R) (at level 70).
 Notation "#" := (fun (R : Obj) (k : Hom _ R) => k).
 Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40).
 
-Inductive list_ (p : Obj) (A : forall q (f : p ≤ q) r (g : q ≤ r), Type) :
-  forall q (f : p ≤ q), Type :=
-| nil_  : list_ p A p # 
-| cons_ : (forall q f, A q f q #) ->
-          (forall q (f : p ≤ q), list_ q (fun r g s h => A r (f ∘ g) s h) q #) ->
-          list_ p A p #.
+Forcing Translate list using Obj Hom.
 
-Forcing Definition list : Type -> Type using Obj Hom.
-Proof.
-  exact list_.
-  (* exact (fun p A q f => list_ q (fun r g => A r (f ∘ g)) q #).  *)
-Defined.
+(* Inductive list_ (p : Obj) (A : forall q (f : p ≤ q) r (g : q ≤ r), Type) : *)
+(*   forall q (f : p ≤ q), Type := *)
+(* | nil_  : list_ p A p #  *)
+(* | cons_ : (forall q f, A q f q #) -> *)
+(*           (forall q (f : p ≤ q), list_ q (fun r g s h => A r (f ∘ g) s h) q #) -> *)
+(*           list_ p A p #. *)
 
-Forcing Definition nil : forall A, list A using Obj Hom.
+(* Forcing Definition list : Type -> Type using Obj Hom. *)
+(* Proof. *)
+(*   exact list_. *)
+(*   (* exact (fun p A q f => list_ q (fun r g => A r (f ∘ g)) q #).  *) *)
+(* Defined. *)
+
+Forcing Definition nil' : forall A, list A using Obj Hom.
 Proof.
   (* eta expansion for pb with universes *)
-  exact (fun p A => nil_ p A).
+  exact (fun p A => ᶠnil p A).
 Defined.
 
-Forcing Definition cons : forall A, A -> list A -> list A using Obj Hom.
+Forcing Definition cons' : forall A, A -> list A -> list A using Obj Hom.
 Proof.
-  exact (fun p A x l => cons_ p A x l). 
+  exact (fun p A x l => ᶠcons p A x l).
 Defined.
 
 Fixpoint list_rec_ p
@@ -45,8 +47,8 @@ Fixpoint list_rec_ p
              P p0 α p0 #) q f 
          (l : ᶠlist p A q f) {struct l} : P p # p # :=
             match l with
-            | nil_ _ _ =>       Hnil p #
-            | cons_ _ _ ny ll => Hcons p # ny ll
+            | ᶠnil _ _ =>       Hnil p #
+            | ᶠcons _ _ ny ll => Hcons p # ny ll
                    (fun (p1 : Obj) (α1 : p ≤ p1) =>
                       list_rec_ p1 
                         (fun p1 f1 => A     p1 (α1 ∘ f1))
@@ -62,7 +64,7 @@ Proof.
   exact (list_rec_ p A P Hnil Hcons p # (l p #)).
 Defined.
 
-Definition bar := fun A (P : Type) (H0 : P) (HS : A -> list A -> P -> P) (x : A) (l : list A) => list_rec A P H0 HS (cons A x l).
+Definition bar := fun A (P : Type) (H0 : P) (HS : A -> list A -> P -> P) (x : A) (l : list A) => list_rec A P H0 HS (cons' A x l).
 
 Definition qux := fun A (P : Type) (H0 : P) (HS : A -> list A -> P -> P) (x : A) (l : list A) => HS x l (list_rec A P H0 HS l).
 
@@ -76,14 +78,14 @@ Check (eq_refl : ᶠbar = ᶠqux).
 
 Definition list_mem : forall A R, list A -> (list A -> R) -> R :=
   fun A R : Type =>
-    list_rec A ((list A -> R) -> R) (fun f => f (nil A))
-             (fun a _ H f => H (fun ll => f (cons A a ll))).
+    list_rec A ((list A -> R) -> R) (fun f => f (nil' A))
+             (fun a _ H f => H (fun ll => f (cons' A a ll))).
 
 Forcing Translate list_mem using Obj Hom.
 
 Forcing Definition list_rect : forall A (P : list A -> Type),
-    P (nil _) ->
-    (forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons _ a l) P) ->
+    P (nil' _) ->
+    (forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons' _ a l) P) ->
     forall l : list A, list_mem _ _ l P using Obj Hom.
 Proof.
   simpl; intros p A P Hnil Hcons l. 
@@ -228,8 +230,8 @@ Proof.
               (l0 : ᶠlist p A p #) : Goal_Type p A P Hnil Hcons p # l0   
          := 
             match l0 as l1 return Goal_Type p A P Hnil Hcons _ _ l1 with
-            | nil_ _ _ =>       Hnil p #
-            | cons_ _ _ a ll => 
+            | ᶠnil _ _ =>       Hnil p #
+            | ᶠcons _ _ a ll => 
               Hcons p # a ll 
                    (fun (p1 : Obj) (α1 : p ≤ p1) =>
                       F p1
@@ -242,13 +244,13 @@ Proof.
 Defined.
 
 Definition bar2 := fun A (P : list A -> Type)
-    (H0 : P (nil _))
-    (HS : forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons _ a l) P)
-    x (l : list A) => list_rect A P H0 HS (cons A x l).
+    (H0 : P (nil' _))
+    (HS : forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons' _ a l) P)
+    x (l : list A) => list_rect A P H0 HS (cons' A x l).
 
 Definition qux2 := fun A (P : list A -> Type)
-    (H0 : P (nil _))
-    (HS : forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons _ a l) P)
+    (H0 : P (nil' _))
+    (HS : forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons' _ a l) P)
     x (l : list A) => HS x l (list_rect A P H0 HS l).
 
 Forcing Translate bar2 using Obj Hom.

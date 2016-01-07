@@ -9,24 +9,26 @@ Notation "P ≤ Q" := (forall R, Hom Q R -> Hom P R) (at level 70).
 Notation "#" := (fun (R : Obj) (k : Hom _ R) => k).
 Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40).
 
-Inductive nat_ (p : Obj) : forall q (f : p ≤ q), Type :=
-| O_ : nat_ p p #
-| S_ : (forall q (f : p ≤ q), nat_ q q #) -> nat_ p p #.
+Forcing Translate nat using Obj Hom.
 
-Forcing Definition nat : Type using Obj Hom.
+(* Inductive nat_ (p : Obj) : forall q (f : p ≤ q), Type := *)
+(* | O_ : nat_ p p # *)
+(* | S_ : (forall q (f : p ≤ q), nat_ q q #) -> nat_ p p #. *)
+
+(* Forcing Definition nat : Type using Obj Hom. *)
+(* Proof. *)
+(*   exact nat_.  *)
+(*   (* exact (fun p q f => nat_ p q f). *) *)
+(* Defined. *)
+
+Forcing Definition O' : nat using Obj Hom.
 Proof.
-  exact nat_. 
-  (* exact (fun p q f => nat_ p q f). *)
+  exact ᶠO. 
 Defined.
 
-Forcing Definition O : nat using Obj Hom.
+Forcing Definition S' : nat -> nat using Obj Hom.
 Proof.
-  exact O_. 
-Defined.
-
-Forcing Definition S : nat -> nat using Obj Hom.
-Proof.
-  exact S_. 
+  exact ᶠS. 
 Defined.
 
 (* Forcing Translate bool using Obj Hom. *)
@@ -40,10 +42,10 @@ Fixpoint nat_rec_ (p : Obj)
   (HS : forall (p0 : Obj) (α : p ≤ p0),
        (forall (p : Obj) (α0 : p0 ≤ p), P p (α ∘ α0) p #) ->
        P p0 (fun (R : Obj) (k : Hom p0 R) => α R k) p0 #)
-  q f (n : nat_ p q f):
+  q f (n : ᶠnat p q f):
    P p # p # := match n with
-            | O_ _ =>    H0 p #
-            | S_ _ n0 => HS p #
+            | ᶠO _ =>    H0 p #
+            | ᶠS _ n0 => HS p #
                    (fun (p1 : Obj) (α1 : p ≤ p1) =>
                       nat_rec_ p1
                         (fun p1 f1 => P  p1 (α1 ∘ f1))
@@ -59,8 +61,8 @@ Proof.
   exact (nat_rec_ p P H0 HS p # (n p #)).
 Defined.
 
-Definition foo := fun (P : Type) (H0 : P) (HS : P -> P) => nat_rec P H0 HS O.
-Definition bar := fun (P : Type) (H0 : P) (HS : P -> P) (n : nat) => nat_rec P H0 HS (S n).
+Definition foo := fun (P : Type) (H0 : P) (HS : P -> P) => nat_rec P H0 HS O'.
+Definition bar := fun (P : Type) (H0 : P) (HS : P -> P) (n : nat) => nat_rec P H0 HS (S' n).
 Definition qux := fun (P : Type) (H0 : P) (HS : P -> P) (n : nat) => HS (nat_rec P H0 HS n).
 
 Forcing Translate foo using Obj Hom.
@@ -72,18 +74,16 @@ Eval compute in ᶠqux.
 
 Check (eq_refl : ᶠbar = ᶠqux).
 
-Scheme nat_rect_ := Induction for nat_ Sort Type.
-
 Definition nat_mem : forall R, nat -> (nat -> R) -> R :=
   fun R : Type =>
-    nat_rec ((nat -> R) -> R) (fun f => f O)
-            (fun H f => H (fun n => f (S n))).
+    nat_rec ((nat -> R) -> R) (fun f => f O')
+            (fun H f => H (fun n => f (S' n))).
 
 Forcing Translate nat_mem using Obj Hom.
 
 Forcing Definition nat_rect : forall (P : nat -> Type),
-    P O ->
-    (forall (n:nat), nat_mem _ n P -> nat_mem _ (S n) P) ->
+    P O' ->
+    (forall (n:nat), nat_mem _ n P -> nat_mem _ (S' n) P) ->
     forall n : nat, nat_mem _ n P using Obj Hom.
 Proof.
 
@@ -117,7 +117,7 @@ Proof.
          (fun (p1 : Obj) (α0 : p0 ≤ p1) =>
           P p1 (# ∘ (# ∘ (α ∘ (# ∘ (# ∘ (α0 ∘ #))))))) p0 
          #).
-  set (Type_of_Goal := fun p (P:Type_of_P p) (H0:Type_of_H0 p P) (HS:Type_of_HS p P) q f (n0: nat_ p q f) => nat_rec_ p
+  set (Type_of_Goal := fun p (P:Type_of_P p) (H0:Type_of_H0 p P) (HS:Type_of_HS p P) q f (n0: ᶠnat p q f) => nat_rec_ p
      (fun (p0 : Obj) (_ : p ≤ p0) (p1 : Obj) (_ : p0 ≤ p1) =>
       (forall p2 : Obj,
        p1 ≤ p2 ->
@@ -161,10 +161,10 @@ Proof.
               (P : Type_of_P p)
               (H0 : Type_of_H0 p P)
               (HS : Type_of_HS p P)
-              (n0 :nat_ p p #) : Type_of_Goal p P H0 HS p # n0
-             := match n0 as n1 in nat_ _ q f return Type_of_Goal p P H0 HS q f n1 with
-            | O_ _ =>   H0 p #
-            | S_ _ n => HS p # n
+              (n0 : ᶠnat p p #) : Type_of_Goal p P H0 HS p # n0
+             := match n0 as n1 in ᶠnat _ q f return Type_of_Goal p P H0 HS q f n1 with
+            | ᶠO _ =>   H0 p #
+            | ᶠS _ n => HS p # n
                    (fun (p1 : Obj) (α1 : p ≤ p1) =>
                       F p1
                         (fun p1 f1 => P  p1 (α1 ∘ f1))
@@ -176,11 +176,11 @@ Proof.
 Defined.
 
 
-Definition bar2 := fun (P : nat -> Type) (H0 : P O)
-    (HS : (forall (n:nat), nat_mem _ n P -> nat_mem _ (S n) P))
-    (n : nat) => nat_rect P H0 HS (S n).
-Definition qux2 := fun (P : nat -> Type) (H0 : P O)
-    (HS : (forall (n:nat), nat_mem _ n P -> nat_mem _ (S n) P))
+Definition bar2 := fun (P : nat -> Type) (H0 : P O')
+    (HS : (forall (n:nat), nat_mem _ n P -> nat_mem _ (S' n) P))
+    (n : nat) => nat_rect P H0 HS (S' n).
+Definition qux2 := fun (P : nat -> Type) (H0 : P O')
+    (HS : (forall (n:nat), nat_mem _ n P -> nat_mem _ (S' n) P))
     (n : nat) => HS n (nat_rect P H0 HS n).
 
 Forcing Translate bar2 using Obj Hom.
@@ -193,3 +193,4 @@ Check (eq_refl : ᶠbar2 = ᶠqux2).
 
 
 End Nat.
+ᶠ
