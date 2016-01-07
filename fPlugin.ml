@@ -224,7 +224,12 @@ let force_translate (obj, hom) gr idopt =
   in
   let ans = match gr with
   | ConstRef cst -> force_translate_constant cat cst id
-  | IndRef ind -> force_translate_inductive cat ind
+  | IndRef ind -> let env = Global.env () in
+		  let ind_gr = force_translate_inductive cat ind in
+		  let ind_ = destIndRef ind_gr in
+		  let _, oib = Inductive.lookup_mind_specif env ind in
+		  let () = List.iteri (fun i _ -> Lib.add_anonymous_leaf (in_translator [ConstructRef (ind, i+1), ConstructRef (ind_, i+1)])) (Array.to_list oib.mind_consnames) in
+                  ind_gr  
   | _ -> error "Translation not handled."
   in
   let () = Lib.add_anonymous_leaf (in_translator [gr, ans]) in
