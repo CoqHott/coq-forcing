@@ -126,16 +126,8 @@ Forcing Definition Box_modality : forall (A B:Type) f x,
 Proof.
   intros p A B f x. 
   apply eq__is_eq, funext_. intro p0. apply funext_. intro α0.
-  (* apply funext_; intro x. *)
   apply funext_. intro p1. apply funext_. intro α1.
-  (* Opaque ᶠBox_modality_inv ᶠBox_unit. *)
   compute in *. 
-  (* assert ((fun p2 (α : p0 ≤ p2) p3 (α2 : p2 ≤ p3) => *)
-  (*            x p # p3 (α ∘ α2)) =  *)
-  (*        (fun p2 (α : p0 ≤ p2) p3 (α2 : p2 ≤ p3) => *)
-  (*            x p2 α p3 α2)). *)
-  (* admit. *)
-  (* rewrite H. reflexivity.  *)
 Abort.
 
 Definition propext_Box := forall (P Q : Type), (P -> Q) -> (Q -> P)
