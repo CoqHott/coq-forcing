@@ -267,6 +267,7 @@ let force_implement (obj, hom) id typ idopt =
     Lib.add_anonymous_leaf (in_translator [ConstRef cst, dst])
   in
   let hook ctx = Lemmas.mk_hook hook in
+  let sigma, _ = Typing.type_of env sigma typ_ in
   let () = Lemmas.start_proof_univs id_ kind sigma typ_ hook in
   ()
 
