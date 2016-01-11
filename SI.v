@@ -1,5 +1,9 @@
 Require Forcing.
-Require Import Arith. 
+
+Inductive le : nat -> nat -> Type :=
+  | le_0 : forall n, 0 <= n
+  | le_n_S : forall m n:nat, n <= m -> S n <= S m
+where "n <= m" := (le n m) : nat_scope.
 
 Definition Obj :Type := nat.
 Definition Hom : Obj -> Obj -> Type := fun n m => m <= n.
@@ -8,20 +12,14 @@ Notation "P ≤ Q" := (forall R, Hom Q R -> Hom P R) (at level 70).
 Notation "#" := (fun (R : Obj) (k : Hom _ R) => k).
 Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40).
 
+Axiom le_Sn_0 : forall n, 0 ≤ S n -> False.
 
 Definition le_S' m : S m ≤ m.
 Proof.
-  intros R k. eapply le_trans; try eassumption. apply le_S. reflexivity.  
-Defined.
-
-Definition inj {m n} (e: Hom n m) : n ≤ m.
-Proof.
-  intros R k. eapply le_trans; eassumption. 
-Defined.
-
-Definition inj2 {m n m' n'} (e: Hom n m -> Hom n' m') : n ≤ m -> n' ≤ m'.
-Proof.
-  intros H. refine (inj (e _)). exact (H _ (le_refl _)). 
+  intros R k. 
+  induction k.
+  - apply le_0.
+  - apply le_n_S. exact IHk. 
 Defined.
 
 Definition pointwise_paths_ {A} {P:A->Type} (f g:forall x:A, P x)
@@ -40,22 +38,25 @@ Proof.
   apply nat_irr.
 Defined. 
 
-
-
 Forcing Definition later : Type -> Type using Obj Hom.
 Proof.
   intros p T q f.
   exact (match q as n return (p ≤ n -> Type) with
          | 0 => fun _ => unit
          | S q => fun (f:p ≤ S q) =>
-             T q (f ∘ (inj (le_n_Sn q))) q # 
+             T q (f ∘ (le_S' q)) q # 
          end f).
 Defined.
 
+Definition le_n_S_admitted m n : m ≤ n -> S m ≤ S n.
+Admitted. 
+
+Definition le_S_n_admitted m n : S m ≤ S n -> m ≤ n.
+Admitted. 
+
 Forcing Definition fixp : forall (T:Type), ((later T) ->  T) -> T using Obj Hom.
 Proof.
-
-  
+ 
   intros p.
    
   assert (forall (T : forall p0 : Obj, p ≤ p0 -> forall p1 : Obj, p0 ≤ p1 -> Type)
@@ -64,43 +65,58 @@ Proof.
                      ᶠlater p1
                             (fun (p2 : Obj) (α1 : p1 ≤ p2) =>
                                T p2 ((f ∘ α ∘ α0 ∘ α1))) p1 
-                            #) -> T p0 (f ∘ α) p0 #) -> T q f q #). 
-  induction p; intros T q α f; apply f; intros q0 α0;
-    destruct q0; try exact tt.
-  - destruct (le_Sn_0 _ ((α ∘ α0) (S q0) (le_refl _))).
-  - simpl.
-    refine (let T' := _ : forall p0 : Obj, p ≤ p0 -> forall p1 : Obj, p0 ≤ p1 -> Type  in _).
-    + intros.
-      refine (T p0 _ p1 X0). exact (inj2 (le_n_S _ _) X ∘ (inj (le_n_Sn p0))).
-      (* exact ((inj (le_n_Sn p)) ∘ X). *)
-    + refine (let X := _ : p ≤ q0 in _). 
-      * apply (inj2 (le_S_n _ _) (α ∘ α0)).
-        (* intros R e. apply le_S_n. refine ( (S R) (le_n_S R q0 e)). *)
-      * pose (IHp T' q0 X). unfold T', X in t.
-        assert (inj2 (le_n_S q0 p) (inj2 (le_S_n q0 p) (α ∘ α0)) = α ∘ α0).
-        apply nat_irrY. rewrite H in t. clear H. refine (t _).
-        intros q1 α1 x. 
-        assert ((inj2 (le_n_S q1 p) (inj2 (le_S_n q0 p) (α ∘ α0) ∘ α1)
-      ∘ inj (Nat.le_succ_diag_r q1)) = α ∘ α0 ∘  inj (le_n_Sn _) ∘ α1).
-        apply nat_irrY. rewrite H.        
-        apply f. intros q2 α2. specialize (x q2 α2). 
-        assert ((fun (p2 : Obj) (α3 : q2 ≤ p2) =>
-      T p2
-        (fun (R : Obj) (k : Hom p2 R) =>
-         α R (α0 R (inj (Nat.le_succ_diag_r q0) R (α1 R (α2 R (α3 R k))))))) =
-                (fun (p2 : Obj) (α3 : q2 ≤ p2) =>
-                   T' p2
-                      (fun (R : Obj) (k : Hom p2 R) => X R (α1 R (α2 R (α3 R k)))))
-               ).
-        apply funext_. intro q3. apply funext_. intro α3.
-        apply funext_. intro q4. apply funext_. intro α4.
-        unfold T'. simpl.  assert
-                             ((fun (R : Obj) (k : Hom q3 R) =>
-      α R (α0 R (inj (Nat.le_succ_diag_r q0) R (α1 R (α2 R (α3 R k)))))) =
-                              (inj2 (le_n_S q3 p)
-        (fun (R0 : Obj) (k0 : Hom q3 R0) =>
-         X R0 (α1 R0 (α2 R0 (α3 R0 k0)))) ∘ inj (Nat.le_succ_diag_r q3))).
-        apply nat_irrY. rewrite H0. reflexivity.
-        rewrite H0. exact x.
+                            #) -> T p0 (f ∘ α) p0 #) -> T q f q #).
+
+  (* intros T q α f. *)
+  induction p; intros T q α f; apply f; intros q0 α0.
+   - destruct q0; try exact tt.
+     destruct (le_Sn_0 _ (α ∘ α0)).
+   - destruct q0; try exact tt.
+     refine (let T' := _ :
+           forall p0 : Obj, p ≤ p0 -> forall p1 : Obj, p0 ≤ p1 -> Type in _).
+    {
+      intros.
+      refine (T p0 _ p1 X0). 
+      (* admit. *)
+      assert (S p ≤ S p0).
+      {
+        apply le_n_S_admitted; auto. 
+       }
+      exact (X1 ∘ ((le_S' p0))).
+    }
+    refine (let X := _ : p ≤ q0 in _).
+    { pose (α ∘ α0). apply le_S_n_admitted; auto.
+     }
+    
+    pose (IHp T' q0 X). unfold T' in t. simpl in *. 
+    simpl in t. unfold X in t.
+    assert (le_n_S_admitted p q0 (le_S_n_admitted p q0 (α ∘ α0)) =
+            α ∘ α0).
+    generalize (α ∘ α0). clear. intro.
+    
+    apply nat_irrY. rewrite H in t. clear H.
+
+    refine (t _). intros q1 α1 x.
+    
+    assert (le_n_S_admitted p q1 (le_S_n_admitted p q0 (α ∘ α0) ∘ α1)
+                  ∘ le_S' q1 = α ∘ α0 ∘ le_S' _ ∘ α1).
+    apply nat_irrY. rewrite H.        
+
+    apply f. intros q2 α2. specialize (x q2 α2). 
+
+    assert ((fun (p2 : Obj) (α3 : q2 ≤ p2) =>
+            T p2 (le_n_S_admitted p p2
+              (fun (R0 : Obj) (k0 : Hom p2 R0) =>
+               le_S_n_admitted p q0 (α ∘ α0) R0 (α1 R0 (α2 R0 (α3 R0 k0))))
+              ∘ le_S' p2)) =
+             fun (p2 : Obj) (α3 : q2 ≤ p2) => T p2 (fun (R : Obj) (k : Hom p2 R) =>
+         α R (α0 R (le_S' q0 R (α1 R (α2 R (α3 R k))))))).
+    apply funext_. intro q3. apply funext_. intro α4.
+    apply f_equal. 
+    intros. apply nat_irrY.
+    rewrite <- H0.
+
+    exact x.
+    
   - intro T. exact (X T p #).
 Defined. 
