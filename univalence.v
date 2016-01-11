@@ -37,19 +37,16 @@ Definition IsEquiv (A B : Type) (f:A -> B) :=
     prod ((fun x => g (f x)) == @id _) 
          ((fun x => f (g x)) == @id _ ) }.
 
+Definition univalence_fun := forall (A B : Type),
+    {f : A -> B & IsEquiv A B f} -> A = B.
+                            
 Forcing Translate pointwise_paths using Obj Hom.
 Forcing Translate sigT using Obj Hom. 
 Forcing Translate prod using Obj Hom. 
 Forcing Translate ID using Obj Hom.
 Forcing Translate id using Obj Hom.
 Forcing Translate IsEquiv using Obj Hom. 
-
-Definition univalence := forall (A B : Type) (f:A -> B) (g:B -> A),
-    (fun x => g (f x)) == @id _ ->
-    (fun x => f (g x)) == @id _ ->
-    A = B.
-
-Forcing Translate univalence using Obj Hom.
+Forcing Translate univalence_fun using Obj Hom. 
 
 Fixpoint even n := match n with 0 => true | 1 => false | S (S n) => even n end.
 
@@ -85,7 +82,7 @@ Proof.
   apply apD10 in H. specialize (H q). apply apD10 in H. exact (H #).
 Qed.
 
-Forcing Definition neg_univ : univalence -> False using Obj Hom.
+Forcing Definition neg_univ : univalence_fun -> False using Obj Hom.
 Proof.
   intros p huniv.
 
@@ -100,7 +97,47 @@ Proof.
                   A₁ p p1 (α ∘ α0) p1 #) ->  A₀ p p0 α p0 # in _).
   intros. specialize (H (neg p0) (fun _ _ => tt)). destruct p0; exact H.
 
-  specialize (huniv p # (A₀ p) (A₁ p) f g).
+  refine (let H := _ : (forall (p0 : Obj) (α : p ≤ p0),
+           ᶠsigT p0
+             (fun (p1 : Obj) (α0 : p0 ≤ p1) (p2 : Obj) (α1 : p1 ≤ p2) =>
+              (forall (p3 : Obj) (α2 : p2 ≤ p3),
+               A₀ p p3 (# ∘ (# ∘ (α ∘ (α0 ∘ (α1 ∘ (α2 ∘ #)))))) p3 #) ->
+              A₁ p p2 (# ∘ (α ∘ (α0 ∘ (α1 ∘ #)))) p2 #)
+             (fun (p1 : Obj) (α0 : p0 ≤ p1)
+                (f : forall (p2 : Obj) (α1 : p1 ≤ p2),
+                     (forall (p3 : Obj) (α2 : p2 ≤ p3),
+                      A₀ p p3
+                        (# ∘ (# ∘ (α ∘ (α0 ∘ (α1 ∘ (# ∘ (α2 ∘ #))))))) p3
+                        #) ->
+                     A₁ p p2 (# ∘ (α ∘ (α0 ∘ (α1 ∘ (# ∘ #))))) p2 #) =>
+              ᶠIsEquiv p1
+                (fun (p2 : Obj) (α1 : p1 ≤ p2) =>
+                 A₀ p p2 (# ∘ (# ∘ (α ∘ (α0 ∘ (α1 ∘ #))))))
+                (fun (p2 : Obj) (α1 : p1 ≤ p2) =>
+                 A₁ p p2 (# ∘ (α ∘ (α0 ∘ (α1 ∘ #)))))
+                (fun (p : Obj) (α1 : p1 ≤ p) => f p (α1 ∘ #))) p0 
+             #) in _). 
+
+  intros. refine (ᶠexistT _ _ _ _ _). exact f.
+  intros. refine (ᶠexistT _ _ _ _ _). exact g.
+
+    (* Dealing with section and retraction *)
+
+  split.
+  {
+    compute. intros. apply eq__is_eq, funext_. intro p4. apply funext_. intro α3.
+    assert ((fun (R : bool) (k : Hom p4 R) => α3 R tt) = (fun (R : bool) (k : Hom p4 R) => α3 R k)).
+    apply funext_. intro p5. apply funext_. intro α4. destruct α4. reflexivity.
+    rewrite <- H. destruct p4; reflexivity.
+  }
+  {
+    compute. intros. apply eq__is_eq, funext_. intro p4. apply funext_. intro α3.
+    assert ((fun (R : bool) (k : Hom p4 R) => α3 R tt) = (fun (R : bool) (k : Hom p4 R) => α3 R k)).
+    apply funext_. intro p5. apply funext_. intro α4. destruct α4. reflexivity.
+    rewrite <- H. destruct p4; reflexivity.
+    }
+  
+  specialize (huniv p # (A₀ p) (A₁ p) H).
   
   (* Proof of False using A₀ = A₁ *)
 
@@ -112,20 +149,7 @@ Proof.
   destruct ((fun X => match huniv in _ = X return X with eq_refl _ => I end) tt).  
   symmetry in huniv.
   destruct ((fun X => match huniv in _ = X return X with eq_refl _ => I end) tt).  
-
-  (* Dealing with section and retraction *)
-  
-  compute. intros. apply eq__is_eq, funext_. intro p1. apply funext_. intro α0.
-  assert ((fun (R : bool) (_ : Hom true R) => α0 R tt) = (fun (R : bool) (k : Hom p1 R) => α0 R k)).
-  apply funext_. intro p2. apply funext_. intro α1. destruct α1. reflexivity.
-  rewrite <- H. destruct p1; reflexivity.
-
-  compute. intros. apply eq__is_eq, funext_. intro p1. apply funext_. intro α0.
-  assert ((fun (R : bool) (_ : Hom true R) => α0 R tt) = (fun (R : bool) (k : Hom p1 R) => α0 R k)).
-  apply funext_. intro p2. apply funext_. intro α1. destruct α1. reflexivity.
-  rewrite <- H. destruct p1; reflexivity.
   
 Defined.
 
-  
 End Univalence. 
