@@ -145,13 +145,6 @@ Forcing Translate propext_Box using Obj Hom.
 
 Axiom propext_ : forall (P Q : Type), (P -> Q) -> (Q -> P) -> P = Q. 
 
-Definition type_naturality p (A₁:forall p0
-                                       (α : p ≤ p0) p1 (α0 : p0 ≤ p1), Type)
-  : forall p0
-                                       (α : p ≤ p0) p1 (α0 : p0 ≤ p1),
-    A₁ p0 α p1 α0 = A₁ p1 (α ∘ α0) p1 #.
-Admitted.
-
 Forcing Definition propext_preservation_Box : propext_Box using Obj Hom.
 Proof.
   intros p P Q H H'.
