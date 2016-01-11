@@ -13,17 +13,7 @@ Notation "P ≤ Q" := (forall R, Hom Q R -> Hom P R) (at level 70).
 Notation "#" := (fun (R : Obj) (k : Hom _ R) => k).
 Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40).
 
-Forcing Definition Empty : Type using Obj Hom.
-Proof.
-intros p q α.
-exact False.
-Defined.
-
-Forcing Definition Empty_rect : forall A, Empty -> A using Obj Hom.
-Proof.
-intros p A e.
-destruct (e p #).
-Defined.
+Forcing Translate False using Obj Hom.
 
 Inductive eq {A : Type} (x : A) : A -> Type :=  eq_refl : eq x x
 where "x = y :> A" := (@eq A x y) : type_scope.
@@ -37,25 +27,34 @@ Definition pointwise_paths {A} {P:A->Type} (f g:forall x:A, P x)
 
 Notation "f == g" := (pointwise_paths f g) (at level 70, no associativity) : type_scope.
 
+Definition apD10 {A} {B:A->Type}
+           (f g : forall x, B x) (h: f = g) :
+    f == g :=
+  match h with eq_refl _ => fun x => eq_refl _ end.
+
+Definition IsEquiv (A B : Type) (f:A -> B) :=
+  { g:B -> A &
+    prod ((fun x => g (f x)) == @id _) 
+         ((fun x => f (g x)) == @id _ ) }.
+
+Forcing Translate pointwise_paths using Obj Hom.
+Forcing Translate sigT using Obj Hom. 
+Forcing Translate prod using Obj Hom. 
+Forcing Translate ID using Obj Hom.
+Forcing Translate id using Obj Hom.
+Forcing Translate IsEquiv using Obj Hom. 
+
 Definition univalence := forall (A B : Type) (f:A -> B) (g:B -> A),
     (fun x => g (f x)) == @id _ ->
     (fun x => f (g x)) == @id _ ->
     A = B.
 
-Forcing Translate pointwise_paths using Obj Hom.
-Forcing Translate ID using Obj Hom.
-Forcing Translate id using Obj Hom.
 Forcing Translate univalence using Obj Hom.
 
 Fixpoint even n := match n with 0 => true | 1 => false | S (S n) => even n end.
 
 Definition A₀ := fun p q (α : p ≤ q) r (β : q ≤ r) => if r then True else False.
 Definition A₁ := fun p q (α : p ≤ q) r (β : q ≤ r) => if r then False else True. 
-
-Definition apD10 {A} {B:A->Type}
-           (f g : forall x, B x) (h: f = g) :
-    f == g :=
-  match h with eq_refl _ => fun x => eq_refl _ end.
 
 Definition neg (b:bool) : bool := if b then false else true. 
 
@@ -86,7 +85,7 @@ Proof.
   apply apD10 in H. specialize (H q). apply apD10 in H. exact (H #).
 Qed.
 
-Forcing Definition neg_univ : univalence -> Empty using Obj Hom.
+Forcing Definition neg_univ : univalence -> False using Obj Hom.
 Proof.
   intros p huniv.
 
@@ -109,10 +108,10 @@ Proof.
   apply apD10 in huniv. specialize (huniv #).
   apply apD10 in huniv. specialize (huniv p). 
   apply apD10 in huniv. specialize (huniv #). compute in *.
-  destruct p. 
-  exact ((fun X => match huniv in _ = X return X with eq_refl _ => I end) False).  
+  destruct p. inversion huniv. 
+  destruct ((fun X => match huniv in _ = X return X with eq_refl _ => I end) tt).  
   symmetry in huniv.
-  exact ((fun X => match huniv in _ = X return X with eq_refl _ => I end) False).  
+  destruct ((fun X => match huniv in _ = X return X with eq_refl _ => I end) tt).  
 
   (* Dealing with section and retraction *)
   

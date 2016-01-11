@@ -1,7 +1,7 @@
 Require Forcing.
 Require Import Eq.
 
-Section Univalence.
+Section Modality.
 
 Variable Obj : Type.
 Variable Hom : Obj -> Obj -> Type.
@@ -17,34 +17,14 @@ Notation "x = y" := (x = y :>_) : type_scope.
 
 Forcing Translate eq using Obj Hom.
 
-Forcing Definition Empty : Type using Obj Hom.
-Proof.
-intros p q α.
-exact False.
-Defined.
-
-Forcing Definition Empty_rect : forall A, Empty -> A using Obj Hom.
-Proof.
-intros p A e.
-destruct (e p #).
-Defined.
-
 Definition pointwise_paths {A} {P:A->Type} (f g:forall x:A, P x)
   := forall x:A, f x = g x.
 
 Notation "f == g" := (pointwise_paths f g) (at level 70, no associativity) : type_scope.
 
-(* Notation "g ° f" := (fun x => g (f x)) (at level 70) : type_scope. *)
-
-Definition univalence := forall (A B : Type) (f:A -> B) (g:B -> A),
-    (fun x => g (f x)) == @id _ ->
-    (fun x => f (g x)) == @id _ ->
-    A = B.
-
 Forcing Translate pointwise_paths using Obj Hom.
 Forcing Translate ID using Obj Hom.
 Forcing Translate id using Obj Hom.
-Forcing Translate univalence using Obj Hom.
 
 Definition apD10 {A} {B:A->Type} {f g : forall x, B x} (h: f = g) : f == g :=
   match h with eq_refl _ => fun x => eq_refl _ end. 
@@ -130,22 +110,39 @@ Proof.
   compute in *. 
 Abort.
 
-Definition propext_Box := forall (P Q : Type), (P -> Q) -> (Q -> P)
-                                               -> Box P = Box Q.
+Definition univalence_Box := forall (A B : Type) (f:A -> B) (g:B -> A),
+    (fun x => g (f x)) == @id _ ->
+    (fun x => f (g x)) == @id _ ->
+    Box A = Box B.
 
-Forcing Translate propext_Box using Obj Hom.
+Forcing Translate univalence_Box using Obj Hom.
 
-Axiom propext_ : forall (P Q : Type), (P -> Q) -> (Q -> P) -> P = Q. 
+Axiom univalence_ : forall (A B : Type) (f:A -> B) (g:B -> A),
+    (fun x => g (f x)) == @id _ ->
+    (fun x => f (g x)) == @id _ ->
+    A = B.
 
-Forcing Definition propext_preservation_Box : propext_Box using Obj Hom.
+Forcing Definition univalence_preservation_Box : univalence_Box using Obj Hom.
 Proof.
-  intros p P Q H H'.
+  intros p A B f g section retraction.
   apply eq__is_eq.
   apply funext_. intro q0. apply funext_. intro α0. apply funext_. intro r. 
-  apply funext_. intro α1. apply propext_. 
-  
-  - intro HP. compute. intros. apply H. intros. apply HP. 
-  - intro HQ. compute. intros. apply H'. intros. apply HQ. 
+  apply funext_. intro α1. refine (univalence_ _ _ _ _ _ _). 
+
+  - intro x. compute. intros. apply f. intros. apply x. 
+  - intro x. compute. intros. apply g. intros. apply x. 
+  - intro x. simpl. apply funext_. intro q2. apply funext_. intro α2.
+    compute in x. specialize (section r (α0 ∘ α1) x).
+    apply eq_is_eq_ in section.
+    apply apD10 in section. specialize (section q2).
+    apply apD10 in section. specialize (section α2).
+    exact section.  
+  - intro x. simpl. apply funext_. intro q2. apply funext_. intro α2.
+    compute in x. specialize (retraction r (α0 ∘ α1) x).
+    apply eq_is_eq_ in retraction.
+    apply apD10 in retraction. specialize (retraction q2).
+    apply apD10 in retraction. specialize (retraction α2).
+    exact retraction.
 Defined. 
   
-End Univalence. 
+End Modality.
