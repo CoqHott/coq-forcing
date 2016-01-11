@@ -54,30 +54,27 @@ Admitted.
 Definition le_S_n_admitted m n : S m ≤ S n -> m ≤ n.
 Admitted. 
 
-Forcing Definition fixp : forall (T:Type), ((later T) ->  T) -> T using Obj Hom.
+Forcing Definition Box : Type -> Type using Obj Hom.
+Proof.
+  intros.
+  exact (forall p1 (α0 : p0 ≤ p1), X p1 (α ∘ α0) p1 #).
+Defined.
+
+Forcing Definition fixp_ : forall (T:Type), ((later T) ->  T) -> Box T using Obj Hom.
 Proof.
  
   intros p.
-   
-  assert (forall (T : forall p0 : Obj, p ≤ p0 -> forall p1 : Obj, p0 ≤ p1 -> Type)
-             q (f:p ≤ q), (forall (p0 : Obj) (α : q ≤ p0),
-                 (forall (p1 : Obj) (α0 : p0 ≤ p1),
-                     ᶠlater p1
-                            (fun (p2 : Obj) (α1 : p1 ≤ p2) =>
-                               T p2 ((f ∘ α ∘ α0 ∘ α1))) p1 
-                            #) -> T p0 (f ∘ α) p0 #) -> T q f q #).
 
-  (* intros T q α f. *)
-  induction p; intros T q α f; apply f; intros q0 α0.
-   - destruct q0; try exact tt.
-     destruct (le_Sn_0 _ (α ∘ α0)).
-   - destruct q0; try exact tt.
-     refine (let T' := _ :
+  induction p; intros T f q α; apply f; intros q0 α0.
+  - destruct q0; try exact tt.
+    destruct (le_Sn_0 _ (α ∘ α0)).
+  - destruct q0; try exact tt.
+    simpl.
+    refine (let T' := _ :
            forall p0 : Obj, p ≤ p0 -> forall p1 : Obj, p0 ≤ p1 -> Type in _).
     {
       intros.
       refine (T p0 _ p1 X0). 
-      (* admit. *)
       assert (S p ≤ S p0).
       {
         apply le_n_S_admitted; auto. 
@@ -88,35 +85,37 @@ Proof.
     { pose (α ∘ α0). apply le_S_n_admitted; auto.
      }
     
-    pose (IHp T' q0 X). unfold T' in t. simpl in *. 
-    simpl in t. unfold X in t.
     assert (le_n_S_admitted p q0 (le_S_n_admitted p q0 (α ∘ α0)) =
             α ∘ α0).
     generalize (α ∘ α0). clear. intro.
-    
-    apply nat_irrY. rewrite H in t. clear H.
+    apply nat_irrY.
+    change (T q0 (α ∘ α0 ∘ (le_S' q0)) q0 #).
+    rewrite <- H. 
+    apply (IHp T'). intros q1 α1 x.
+    apply f. intros. specialize (x _  α2).
 
-    refine (t _). intros q1 α1 x.
-    
-    assert (le_n_S_admitted p q1 (le_S_n_admitted p q0 (α ∘ α0) ∘ α1)
-                  ∘ le_S' q1 = α ∘ α0 ∘ le_S' _ ∘ α1).
-    apply nat_irrY. rewrite H.        
-
-    apply f. intros q2 α2. specialize (x q2 α2). 
-
-    assert ((fun (p2 : Obj) (α3 : q2 ≤ p2) =>
-            T p2 (le_n_S_admitted p p2
-              (fun (R0 : Obj) (k0 : Hom p2 R0) =>
-               le_S_n_admitted p q0 (α ∘ α0) R0 (α1 R0 (α2 R0 (α3 R0 k0))))
-              ∘ le_S' p2)) =
-             fun (p2 : Obj) (α3 : q2 ≤ p2) => T p2 (fun (R : Obj) (k : Hom p2 R) =>
-         α R (α0 R (le_S' q0 R (α1 R (α2 R (α3 R k))))))).
+    assert ((fun (p1 : Obj) (α3 : p0 ≤ p1) =>
+      T p1
+        (fun (R : Obj) (k : Hom p1 R) =>
+         le_n_S_admitted p q1
+           (fun (R0 : Obj) (k0 : Hom q1 R0) => α1 R0 k0) R
+           (le_S' q1 R (α2 R (α3 R k))))) =
+             (fun (p : Obj) (α : p0 ≤ p) =>
+         T' p (fun (R : Obj) (k : Hom p R) => α1 R (α2 R (α R k))))).
+    unfold T'. 
     apply funext_. intro q3. apply funext_. intro α4.
     apply f_equal. 
     intros. apply nat_irrY.
-    rewrite <- H0.
-
-    exact x.
+    rewrite H0.
     
-  - intro T. exact (X T p #).
+    apply x. 
 Defined. 
+
+Forcing Definition Box_counit : forall (A:Type) , Box A -> A using Obj Hom.
+Proof.
+  intros. exact (X p # p #).
+Defined.
+
+Definition fixp : forall (T:Type), ((later T) ->  T) -> T  :=
+  fun T f => Box_counit _ (fixp_ T f).
+
