@@ -169,4 +169,3 @@ Check (eq_refl : ᶠbar2 = ᶠqux2).
 
 
 End Nat.
-ᶠ
