@@ -228,13 +228,13 @@ Proof.
 Defined.
 
 Definition bar2 := fun A (P : list A -> Type)
-    (H0 : P nil)
-    (HS : forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons a l) P)
-    x (l : list A) => list_rect A P H0 HS (cons x l).
+    (H0 : P (nil _))
+    (HS : forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons _ a l) P)
+    x (l : list A) => list_rect A P H0 HS (cons _ x l).
 
 Definition qux2 := fun A (P : list A -> Type)
-    (H0 : P nil)
-    (HS : forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons a l) P)
+    (H0 : P (nil _))
+    (HS : forall (a:A) (l:list A), list_mem _ _ l P -> list_mem _ _ (cons _ a l) P)
     x (l : list A) => HS x l (list_rect A P H0 HS l).
 
 Forcing Translate bar2 using Obj Hom.
@@ -244,5 +244,3 @@ Eval compute in ᶠbar2.
 Eval compute in ᶠqux2.
 
 Check (eq_refl : ᶠbar2 = ᶠqux2).
-
-End List.
