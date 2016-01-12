@@ -71,7 +71,7 @@ Definition funext := forall A (B : A -> Type) (f g : forall a, B a),
 Forcing Translate funext using Obj Hom.
 
 Definition eq__is_eq : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #),
-    x = y -> ᶠeq p _ x y p #.
+    x = y -> forall q f, ᶠeq q (fun r g => A r (f ∘ g)) (fun r g => x r (f ∘ g)) (fun r g => y r (f ∘ g)) q #.
 Proof.
   intros. destruct H. reflexivity. 
 Defined.
@@ -83,15 +83,17 @@ Proof.
 Defined. 
 
 Definition eq_is_eq_section : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #)
-    (e : x = y), eq_is_eq_ _ _ _ _ p # (eq__is_eq _ _ _ _ e) = e.
+    (e : x = y), eq_is_eq_ _ _ _ _ p # (eq__is_eq _ _ _ _ e p #) = e.
 Proof.
   intros. destruct e. reflexivity.
 Defined. 
 
 Definition eq_is_eq_retraction  p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #)
-           (e :  ᶠeq p _ x y p #)  :
-    eq__is_eq _ _ _ _ (eq_is_eq_ _ _ _ _ _ _ e) = e.
-Admitted. 
+           q f (e :  ᶠeq q (fun r g => A r (f ∘ g)) (fun r g => x r (f ∘ g)) (fun r g => y r (f ∘ g)) q #)  :
+    eq__is_eq _ _ _ _ (eq_is_eq_ _ _ _ _ _ _ e) q # = e.
+Proof.
+compute.
+Abort. 
 
 Definition concat : forall (A : Type) (x y z : A), x = y -> y = z -> x = z.
 Proof. 
@@ -107,8 +109,8 @@ Opaque eq__is_eq.
 
 Forcing Definition funext_preservation : funext using Obj Hom.
 Proof.
-  intros p A B f g. refine (ᶠexistT _ _ _ _ _).
-  - intros.  
+  intros p A B f g. simple refine (ᶠexistT _ _ _ _ _); cbv beta.
+  - intros.
     apply eq__is_eq.
     apply funext_. intro p1.
     apply funext_. intro α0.
