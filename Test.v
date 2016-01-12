@@ -59,14 +59,6 @@ Proof.
   apply X.
 Defined.  
 
-(** Define a term directly in the forcing layer. *)
-
-Forcing Definition sum : Type -> Type -> Type using Obj Hom.
-Proof.
-intros p A B p0 α.
-exact ((forall p1 (α0 : p0 ≤ p1), A p1 ((α ∘ α0) ∘ #) p1 #) + (forall p1 (α0 : p0 ≤ p1), B p1 ((α ∘ α0) ∘ #) p1 #))%type. 
-Defined.
-
 Print sum.
 Print ᶠsum.
 
