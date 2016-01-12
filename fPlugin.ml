@@ -138,14 +138,17 @@ let force_translate_inductive cat ind =
       let nindexes = List.length body.mind_arity_ctxt - nparams in
       let ctx = List.firstn nindexes body.mind_arity_ctxt in
       let env' = Environ.push_rel_context mib.mind_params_ctxt env in
-      let a = it_mkProd_or_LetIn s ctx in
-      FTranslate.translate_type ~toplevel:false translator cat env' sigma a
+      (* On obtient l'arité de l'inductif en traduisant le type de chaque indice *)
+      (* i.e : si I ... : (i1 : A1),...,(in : An),s alors l'arité traduite est (i1 : [A1])...(in : [An]), s   *)
+      let (sigma, tr_ctx) = List.fold_left (fun (sigma, ctx) (x, o, t) -> let (sigma, t) = FTranslate.translate_type ~toplevel:false translator cat env' sigma t in
+                                                         (sigma, (x, o, t) :: ctx)) (sigma, []) ctx in
+      (sigma, it_mkProd_or_LetIn s tr_ctx)
     in
     let fold_lc (sigma, lc_) typ =
       (** We exploit the fact that the translation actually does not depend on
           the rel_context of the environment except for its length. *)
       let env' = Environ.push_named_context substind env in
-      let envtr = Environ.push_rel_context (snd (CList.sep_last params)) env' in
+      let envtr = Environ.push_rel_context (CList.tl params) env' in
       let typ = snd (decompose_prod_n nparams typ) in
       let typ = Vars.substnl (List.map mkVar invsubst) nparams typ in
       let (sigma, typ_) =
