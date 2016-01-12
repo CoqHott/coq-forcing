@@ -21,12 +21,12 @@ Defined.
 
 Forcing Definition cons : forall A, A -> list A -> list A using Obj Hom.
 Proof.
-intros p A x l; apply (_cons _ _ x l).
+exact _cons. 
 Defined.
 
 Forcing Definition nil : forall A, list A using Obj Hom.
 Proof.
-intros p A; apply _nil.
+exact _nil.
 Defined.
 
 Fixpoint list_rec_ p
