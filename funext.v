@@ -70,17 +70,23 @@ Definition funext := forall A (B : A -> Type) (f g : forall a, B a),
 
 Forcing Translate funext using Obj Hom.
 
-Definition eq__is_eq : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #),
-    x = y -> forall q f, ᶠeq q (fun r g => A r (f ∘ g)) (fun r g => x r (f ∘ g)) (fun r g => y r (f ∘ g)) q #.
-Proof.
-  intros. destruct H. reflexivity. 
-Defined.
+Inductive
+ᶠeq' (p : Obj)
+(A : forall p0 : Obj, p ≤ p0 -> forall p : Obj, p0 ≤ p -> Type)
+(x : forall (p0 : Obj) (α : p ≤ p0), A p0 (α ∘ #) p0 #)
+  : (forall (p0 : Obj) (α : p ≤ p0), A p0 (# ∘ (α ∘ #)) p0 #) ->
+    forall p0 : Obj, p ≤ p0 -> Prop :=  ᶠeq_refl' : forall q f, ᶠeq' p A x x q f.
 
-Definition eq_is_eq_ : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #) q f,
-   ᶠeq p _ x y q f -> x = y.
-Proof.
-  intros. destruct H. reflexivity.
-Defined. 
+(* Definition eq__is_eq p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #) *)
+(*     (e:x = y) : forall q f, ᶠeq q (fun r g => A r (f ∘ g)) (fun r g => x r (f ∘ g)) (fun r g => y r (f ∘ g)) q # := *)
+(*   fun q f => match e with eq_refl _ => ᶠeq_refl q (fun r g => A r (f ∘ g)) (fun r g => x r (f ∘ g)) end. *)
+
+Definition eq__is_eq p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #)
+    (e:x = y) : forall q f, ᶠeq' p A x y q f :=
+  fun q f => match e with eq_refl _ => ᶠeq_refl' _ _ _ _ _ end.
+
+Definition eq_is_eq_ p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #) q f (e:ᶠeq' p _ x y q f) : x = y :=
+  match e with ᶠeq_refl' _ _ _ _ _ => eq_refl x end. 
 
 Definition eq_is_eq_section : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #)
     (e : x = y), eq_is_eq_ _ _ _ _ p # (eq__is_eq _ _ _ _ e p #) = e.
@@ -89,11 +95,11 @@ Proof.
 Defined. 
 
 Definition eq_is_eq_retraction  p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #)
-           q f (e :  ᶠeq q (fun r g => A r (f ∘ g)) (fun r g => x r (f ∘ g)) (fun r g => y r (f ∘ g)) q #)  :
-    eq__is_eq _ _ _ _ (eq_is_eq_ _ _ _ _ _ _ e) q # = e.
+           q f (e :  ᶠeq' p A x y q f)  :
+    eq__is_eq _ _ _ _ (eq_is_eq_ _ _ _ _ _ _ e) q f = e.
 Proof.
-compute.
-Abort. 
+  destruct e. reflexivity.
+Defined. 
 
 Definition concat : forall (A : Type) (x y z : A), x = y -> y = z -> x = z.
 Proof. 
