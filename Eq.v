@@ -144,5 +144,19 @@ pose (Type_of_A := fun p => forall p0 : Obj, p ≤ p0 -> forall p : Obj, p0 ≤ 
             | ᶠeq_refl _ _ _ =>  P_refl p # end).
 Defined. 
  
+Forcing Definition eq_rect_partial : forall A (x :A) (P : A -> Type),
+    P x ->
+    forall y (e:x = y), P y using Obj Hom.
+Proof.
+  intros p A x P P_refl y e.
+  exact (match e p # in ᶠeq _ _ _ y' q f return P p # y' q f
+         with | ᶠeq_refl _ _ _ => P_refl p # end).
+Defined. 
+
+Forcing Definition eq_rect_partial_refl : forall A (x :A) (P : A -> Type)
+    (a : P x), eq_rect_partial A x P a x (eq_refl _) = a using Obj Hom.
+Proof.
+  intros. reflexivity.
+Defined. 
 
 End Eq.
