@@ -37,16 +37,46 @@ Definition IsEquiv (A B : Type) (f:A -> B) :=
     prod ((fun x => g (f x)) == @id _) 
          ((fun x => f (g x)) == @id _ ) }.
 
-Definition univalence_fun := forall (A B : Type),
-    {f : A -> B & IsEquiv A B f} -> A = B.
-                            
+
+Definition IsEquiv_id (A : Type) : IsEquiv _ _ (@id A).
+Proof.
+  refine (existT _ _ _).
+  - exact (@id _).                                    
+  - split. all : intro; reflexivity. 
+Defined.
+
+
+Forcing Definition eq_rect_partial : forall A (x :A) (P : A -> Type),
+    P x ->
+    forall y (e:x = y), P y using Obj Hom.
+Proof.
+  intros p A x P P_refl y e.
+  exact (match e p # in ᶠeq _ _ _ y' q f return P p # y' q f
+         with | ᶠeq_refl _ _ _ => P_refl p # end).
+Defined.
+
+Definition path_to_equiv (A B : Type) :
+  A = B -> {f : A -> B & IsEquiv A B f}.
+Proof.
+  refine (eq_rect_partial Type A (fun B => {f : A -> B & IsEquiv A B f}) _ B).
+  refine (existT _ _ _).
+  - exact (@id _).
+  - exact (IsEquiv_id _).
+Defined. 
+
+
+Definition univalence := forall (A B : Type), IsEquiv _ _ (path_to_equiv A B).
+   
 Forcing Translate pointwise_paths using Obj Hom.
 Forcing Translate sigT using Obj Hom. 
 Forcing Translate prod using Obj Hom. 
 Forcing Translate ID using Obj Hom.
 Forcing Translate id using Obj Hom.
 Forcing Translate IsEquiv using Obj Hom. 
-Forcing Translate univalence_fun using Obj Hom. 
+Forcing Translate IsEquiv_id using Obj Hom. 
+Forcing Translate path_to_equiv using Obj Hom.
+Forcing Translate univalence using Obj Hom.
+
 
 Fixpoint even n := match n with 0 => true | 1 => false | S (S n) => even n end.
 
@@ -56,10 +86,6 @@ Definition A₁ := fun p q (α : p ≤ q) r (β : q ≤ r) => if r then False el
 Definition neg (b:bool) : bool := if b then false else true. 
 
 Axiom funext_ : forall A (B : A -> Type) (f g : forall a, B a), f == g -> f = g.
-
-Definition funext := forall A (B : A -> Type) (f g : forall a, B a), f == g -> f = g.
-
-Forcing Translate funext using Obj Hom.
 
 Definition eq__is_eq : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #),
     x = y -> ᶠeq p _ x y p #.
@@ -73,16 +99,7 @@ Proof.
   intros. destruct H. apply eq_refl.
 Defined. 
 
-Forcing Definition funext_preservation : funext using Obj Hom.
-Proof.
-  intros p A B f g H. 
-  apply eq__is_eq, funext_. intro q.
-  apply funext_. intro α. apply funext_. intro a. 
-  specialize (H q α a). apply eq_is_eq_ in H. 
-  apply apD10 in H. specialize (H q). apply apD10 in H. exact (H #).
-Qed.
-
-Forcing Definition neg_univ : univalence_fun -> False using Obj Hom.
+Forcing Definition neg_univ : univalence -> False using Obj Hom.
 Proof.
   intros p huniv.
 
@@ -137,7 +154,9 @@ Proof.
     rewrite <- H. destruct p4; reflexivity.
     }
   
-  specialize (huniv p # (A₀ p) (A₁ p) H).
+  specialize (huniv p # (A₀ p) (A₁ p)).
+  destruct huniv as [huniv _].
+  specialize (huniv p # H).
   
   (* Proof of False using A₀ = A₁ *)
 
