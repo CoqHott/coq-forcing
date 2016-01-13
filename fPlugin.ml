@@ -117,13 +117,27 @@ let force_translate_inductive cat ind =
   let nparams = List.length mib.mind_params_ctxt in
   (** For each block in the inductive we build the translation *)
   let substind =
-    Array.to_list
-    (Array.map (fun oib -> (oib.mind_typename, None,
+    Array.map_to_list (fun oib -> (oib.mind_typename, None,
 			    Inductive.type_of_inductive env ((mib, oib), Univ.Instance.empty)))
-	       mib.mind_packets)
+	       mib.mind_packets
   in
   let invsubst = List.map pi1 substind in
   let translator = add_translator !translator (List.map (fun id -> VarRef id, VarRef id) invsubst) in
+(** À chaque inductif I on associe une fonction λp.λparams.λindices.λ(qα), 
+    (mkVar I) p params indices *)
+  let sigma = Evd.from_env env in
+  let (sigma, substfn) = 
+    let fn_oib oib = 
+      let narityctxt = List.length oib.mind_arity_ctxt in
+      let fnbody = mkApp (mkVar oib.mind_typename, Array.init (narityctxt + 1) (fun i -> mkRel (narityctxt + 3 - i))) in
+      let obj = cat.FTranslate.cat_obj in
+      let (sigma, tr_arity) = List.fold_left (fun (sigma, ctxt) (x, o, t_) -> let (sigma, tr_t_) = FTranslate.translate_type translator cat env sigma t_ in
+                                                                        (sigma, (x, o, tr_t_) :: ctxt)) (sigma, []) oib.mind_arity_ctxt
+      in
+      (sigma, it_mkLambda_or_LetIn fnbody ([(Anonymous, None, FTranslate.hom cat (mkRel 3) (mkRel (3 + narityctxt))); (Anonymous, None, obj)] @ tr_arity @ [(Anonymous, None, obj)]))
+    in
+    Array.fold_left (fun (sigma, acc) oib -> let (sigma, fn) = fn_oib oib in (sigma, (oib.mind_typename, fn)::acc)) (sigma, []) mib.mind_packets
+  in
   let make_one_entry params body (sigma, bodies_) =
     let template = match body.mind_arity with
     | RegularArity _ -> false
@@ -135,34 +149,38 @@ let force_translate_inductive cat ind =
       else (sigma, mkProp)
     in
     let (sigma, arity) =
+      (** On obtient l'arité de l'inductif en traduisant le type de chaque indice
+          i.e : si I ... : (i1 : A1),...,(in : An),s alors l'arité traduite 
+          est (i1 : [A1])...(in : [An]), s *)
       let nindexes = List.length body.mind_arity_ctxt - nparams in
       let ctx = List.firstn nindexes body.mind_arity_ctxt in
       let env' = Environ.push_rel_context mib.mind_params_ctxt env in
-      (* On obtient l'arité de l'inductif en traduisant le type de chaque indice *)
-      (* i.e : si I ... : (i1 : A1),...,(in : An),s alors l'arité traduite est (i1 : [A1])...(in : [An]), s   *)
-      let (sigma, tr_ctx) = List.fold_left (fun (sigma, ctx) (x, o, t) -> let (sigma, t) = FTranslate.translate_type ~toplevel:false translator cat env' sigma t in
-                                                         (sigma, (x, o, t) :: ctx)) (sigma, []) ctx in
-      (sigma, it_mkProd_or_LetIn s tr_ctx)
+      let a = it_mkProd_or_LetIn s ctx in
+      let (sigma, a) = FTranslate.translate_type ~toplevel:false translator cat env' sigma a in
+      (** En traduisant le type, le codomaine a aussi été traduit. On le remplace par le codomaine
+          originel *)
+      let (a, _) = decompose_prod_n nindexes a in 
+      (sigma, compose_prod a s)
     in
     let fold_lc (sigma, lc_) typ =
       (** We exploit the fact that the translation actually does not depend on
           the rel_context of the environment except for its length. *)
       let env' = Environ.push_named_context substind env in
       let envtr = Environ.push_rel_context (CList.tl params) env' in
-      let typ = snd (decompose_prod_n nparams typ) in
+      let _, typ = decompose_prod_n nparams typ in
       let typ = Vars.substnl (List.map mkVar invsubst) nparams typ in
       let (sigma, typ_) =
-	FTranslate.translate_type ~toplevel:false (* ~lift:nparams *) translator cat envtr sigma typ in
-      (** The translation assumes that the first introduced variable is the
-          toplevel forcing condition, which is not the case here. *)
+        (** The translation assumes that the first introduced variable is the
+            toplevel forcing condition, which is not the case here. *)
+        FTranslate.translate_type ~toplevel:false translator cat envtr sigma typ in
+      let typ_ = Vars.replace_vars substfn typ_ in 
       let typ_ = Reductionops.nf_beta Evd.empty typ_ in
       let typ_ = Vars.substn_vars (List.length params + 1) invsubst typ_ in
       let envtyp_ = Environ.push_rel_context [Name (Nameops.add_suffix body.mind_typename "_f"),None,
 					      it_mkProd_or_LetIn arity params] env in
       let envtyp_ = Environ.push_rel_context params envtyp_ in
-      let sigma, ty = Typing.type_of envtyp_ sigma typ_ in
+      let sigma, ty = Typing.type_of envtyp_ sigma typ_ in                             
       let sigma, b = Reductionops.infer_conv ~pb:Reduction.CUMUL envtyp_ sigma ty s in
-      assert b;
       (sigma, eta_reduce typ_ :: lc_)
     in
     let (sigma, lc_) = Array.fold_left fold_lc (sigma, []) body.mind_user_lc in
@@ -181,7 +199,6 @@ let force_translate_inductive cat ind =
   | Some None -> Some None
   | Some (Some (id, _, _)) -> Some (Some (translate_name id))
   in
-  let sigma = Evd.from_env env in
   let (sigma, params_) = FTranslate.translate_context translator cat env sigma mib.mind_params_ctxt in
   let (sigma, bodies_) = Array.fold_right (make_one_entry params_) mib.mind_packets (sigma, []) in
   let debug b =
@@ -233,6 +250,8 @@ let force_translate (obj, hom) gr idopt =
      let ind_ = destIndRef ind_gr in
      let _, oib = Inductive.lookup_mind_specif env ind in
      let () = Array.iteri (fun i _ -> Lib.add_anonymous_leaf (in_translator [ConstructRef (ind, i+1), ConstructRef (ind_, i+1)])) oib.mind_consnames in
+     let ind_name = oib.mind_typename in 
+     
      ind_gr  
   | _ -> error "Translation not handled."
   in

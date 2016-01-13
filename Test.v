@@ -27,50 +27,8 @@ Definition qux := (fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A).
 Definition quz := Type -> Type.
 Definition eq := fun (A : Type) (x y : A) => forall (P : A -> Prop), P x -> P y.
 
-Forcing Translate foo using Obj Hom.
-Forcing Translate bar using Obj Hom.
-Forcing Translate qux using Obj Hom.
-Forcing Translate quz using Obj Hom.
-Forcing Translate eq using Obj Hom.
-
-Print ᶠfoo.
-Print ᶠbar.
-Print ᶠqux.
-Print ᶠquz.
-Forcing Translate nat using Obj Hom.
-Forcing Translate unit using Obj Hom.
 Forcing Translate list using Obj Hom.
-Forcing Translate sum using Obj Hom.
-
-Scheme ᶠnat_rect := Induction for ᶠnat Sort Type.
-
-Lemma idfnat (p q : Obj) f (f' : ᶠnat q p f) : ᶠnat q p f.
-Proof.
-  induction f'.
-  constructor.
-  constructor.
-Defined.  
-
-Forcing Definition idn : nat -> nat using Obj Hom.
-Proof.
-  intros.
-  specialize (X p #).
-  apply idfnat.
-  apply X.
-Defined.  
-
-(** Define a term directly in the forcing layer. *)
-
-Forcing Definition sum : Type -> Type -> Type using Obj Hom.
-Proof.
-intros p A B p0 α.
-exact ((forall p1 (α0 : p0 ≤ p1), A p1 ((α ∘ α0) ∘ #) p1 #) + (forall p1 (α0 : p0 ≤ p1), B p1 ((α ∘ α0) ∘ #) p1 #))%type. 
+Forcing Definition mlk : forall A, list A using Obj Hom.
+compute.
+exact ᶠnil.
 Defined.
-
-Print sum.
-Print ᶠsum.
-
-Definition baz := sum Type Type.
-Forcing Translate baz using Obj Hom.
-
-Print ᶠbaz.
