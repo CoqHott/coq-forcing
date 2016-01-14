@@ -131,11 +131,11 @@ let apply_global env sigma gr u fctx =
   | IndRef _ -> let cat = fctx.category in
                 let _, oib = Inductive.lookup_mind_specif env (fst (destInd c)) in
                 let narity = List.length oib.mind_arity_ctxt in
-                let app = mkApp (c, Array.append [|mkRel 2|] (Array.init (narity - 1) (fun i -> mkRel (4+i)))) in
-                let qf = [(Anonymous, None, hom cat (mkRel 1) (mkRel 1)); (Anonymous, None, cat.cat_obj)] in
-                msg_info (Termops.print_constr (it_mkLambda_or_LetIn app (qf @ snd (CList.sep_last oib.mind_arity_ctxt))));
-                (sigma, it_mkLambda_or_LetIn app (qf @ snd (CList.sep_last oib.mind_arity_ctxt)))
-                  
+                let app = mkApp (c, Array.append [|mkRel 2|] (Array.init (narity - 1) (fun i -> mkRel (3+i)))) in
+                let qf = [(Anonymous, None, hom cat (mkRel (1 + 2 * narity)) (mkRel 1)); (Anonymous, None, cat.cat_obj)] in
+                let _, params = CList.sep_last oib.mind_arity_ctxt in
+                msg_info (Termops.print_constr (it_mkLambda_or_LetIn app (qf @ List.mapi (fun i (x, o, t) -> (x, o, Vars.subst1 (mkRel last) t)) params)));
+                (sigma, it_mkLambda_or_LetIn app (qf @ List.mapi (fun i (x, o, t) -> (x, o, Vars.subst1 (mkRel last) t)) params))
   | _ -> (sigma, mkApp (c, [| mkRel last |]))
 
 (** Forcing translation core *)
