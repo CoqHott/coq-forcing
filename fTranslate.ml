@@ -184,9 +184,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 | Prod (na, t, u) ->
   let (ext0, fctx) = extend fctx in
   (** Translation of t *)
-  let (ext, tfctx) = extend fctx in
-  let (sigma, t_) = otranslate_type env tfctx sigma t in
-  let t_ = it_mkProd_or_LetIn t_ ext in
+  let (sigma, t_) = otranslate_boxed_type env fctx sigma t in
   (** Translation of u *)
   let ufctx = add_variable fctx in
   let (sigma, u_) = otranslate_type env ufctx sigma u in
