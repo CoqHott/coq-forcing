@@ -152,8 +152,7 @@ let apply_global env sigma gr u fctx =
     in
     let params = CList.init nparams mk_var in
     let app = applist (c, mkRel (last_condition fctx) :: params) in
-    let map_p i c = Vars.substnl_decl [mkRel (last - i)] (nparams - i - 1) c in
-(*     let map_p i c = Vars.substnl_decl [mkProp] (last - i - 1) c in *)
+    let map_p i c = Vars.substnl_decl [mkRel last] (nparams - i - 1) c in
     let paramtyp = List.mapi map_p paramtyp in
     let ans = it_mkLambda_or_LetIn app (ext @ paramtyp) in
     msg_info (Termops.print_constr ans);
