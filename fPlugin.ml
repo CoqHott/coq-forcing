@@ -129,14 +129,21 @@ let force_translate_inductive cat ind =
   let (sigma, substfn) = 
     let fn_oib oib = 
       let narityctxt = List.length oib.mind_arity_ctxt in
-      let fnbody = mkApp (mkVar oib.mind_typename, Array.init (narityctxt + 1) (fun i -> mkRel (narityctxt + 3 - i))) in
+      let args = Array.init (narityctxt + 1) (fun i -> mkRel (narityctxt + 3 - i)) in
+      let fnbody = mkApp (mkVar oib.mind_typename, args) in
       let obj = cat.FTranslate.cat_obj in
-      let (sigma, tr_arity) = List.fold_left (fun (sigma, ctxt) (x, o, t_) -> let (sigma, tr_t_) = FTranslate.translate_type translator cat env sigma t_ in
-                                                                        (sigma, (x, o, tr_t_) :: ctxt)) (sigma, []) oib.mind_arity_ctxt
+      let fold (sigma, ctxt) (x, o, t_) =
+        let (sigma, tr_t_) = FTranslate.translate_type translator cat env sigma t_ in
+        (sigma, (x, o, tr_t_) :: ctxt)
       in
+      let (sigma, tr_arity) = List.fold_left fold (sigma, []) oib.mind_arity_ctxt in
       (sigma, it_mkLambda_or_LetIn fnbody ([(Anonymous, None, FTranslate.hom cat (mkRel 3) (mkRel (3 + narityctxt))); (Anonymous, None, obj)] @ tr_arity @ [(Anonymous, None, obj)]))
     in
-    Array.fold_left (fun (sigma, acc) oib -> let (sigma, fn) = fn_oib oib in (sigma, (oib.mind_typename, fn)::acc)) (sigma, []) mib.mind_packets
+    let fold (sigma, acc) oib =
+      let (sigma, fn) = fn_oib oib in
+      (sigma, (oib.mind_typename, fn) :: acc)
+    in
+    Array.fold_left fold (sigma, []) mib.mind_packets
   in
   let make_one_entry params body (sigma, bodies_) =
     let template = match body.mind_arity with
