@@ -17,140 +17,98 @@ Forcing Translate False using Obj Hom.
 Inductive eq {A : Type} (x : A) : A -> Type :=  eq_refl : eq x x
 where "x <> y :> A" := (@eq A x y) : type_scope.
 
-Notation "x <> y" := (x <> y :>_) : type_scope.
+Notation "x = y" := (x <> y :>_) : type_scope.
 
-Inductive _eq (p : Obj)
-(A : forall p0 : Obj, p ≤ p0 -> forall p : Obj, p0 ≤ p -> Type)
-(x : forall (p0 : Obj) (α : p ≤ p0), A p0 α p0 #)
-  : (forall (p0 : Obj) (α : p ≤ p0), A p0 α p0 #) ->
-    Type :=  _eq_refl' :  _eq p A x x.
-
-(* Forcing Translate eq using Obj Hom. *)
-
-Forcing Definition eq' : forall {A : Type} (x : A), A -> Type using Obj Hom.
-Proof. 
-  intros p A x y q f. exact (_eq q (fun (p0 : Obj) (α : q ≤ p0) => A p0 (f ∘ α))
-                                 (fun (p0 : Obj) (α : q ≤ p0) => x p0 (f ∘ α))
-                                 (fun (p0 : Obj) (α : q ≤ p0) => y p0 (f ∘ α))). 
-Defined. 
-
-Notation "x = y" := (eq' _  x y) : type_scope.
-
-Forcing Definition eq_refl' : forall {A : Type} (x : A), x = x using Obj Hom.
-Proof.
-  exact _eq_refl'.
-Defined. 
+Forcing Translate eq using Obj Hom.
 
 Definition pointwise_paths {A} {P:A->Type} (f g:forall x:A, P x)
-  := forall x:A, eq (f x) (g x).
-
-Definition pointwise_paths' {A} {P:A->Type} (f g:forall x:A, P x)
   := forall x:A, f x = g x.
 
-Notation "f == g" := (pointwise_paths' f g) (at level 70, no associativity) : type_scope.
+Notation "f == g" := (pointwise_paths f g) (at level 70, no associativity) : type_scope.
 
-Forcing Definition eq_rect_partial : forall A (x :A) (P : A -> Type),
+Forcing Definition leibniz : forall A (x :A) (P : A -> Type),
     P x ->
     forall y (e:x = y), P y using Obj Hom.
 Proof.
   intros p A x P P_refl y e.
-  exact (match e p # in _eq _ _ _ y' return P p # y' p #
-         with | _eq_refl' _ _ _ => P_refl p # end).
+  exact (match e p # in eqᶠ _ _ _ y' return P p # y' p #
+         with | eq_reflᶠ _ _ _ => P_refl p # end).
 Defined.
 
-Definition apD10' {A} {B:A->Type}
-           {f g : forall x, B x} (h: f = g) :
-  f == g.
-Proof.
-  refine (eq_rect_partial _ f (fun g => f == g) _ g h).
-  intro. apply eq_refl'. 
-Defined. 
+Definition apD10 {A} {B:A->Type}
+           {f g : forall x, B x} : f = g ->
+  f == g :=
+  leibniz (forall x : A, B x)
+          f (fun g0 : forall x : A, B x => f == g0)
+          (fun x : A => eq_refl (f x)) g.
 
-Definition IsEquiv' (A B : Type) (f:A -> B) :=
+Definition IsEquiv (A B : Type) (f:A -> B) :=
   { g:B -> A &
     prod ((fun x => g (f x)) == @id _) 
          ((fun x => f (g x)) == @id _ ) }.
 
-Opaque apD10' eq_rect_partial.
-
-Forcing Translate pointwise_paths' using Obj Hom.
-Forcing Translate apD10' using Obj Hom.
+Forcing Translate pointwise_paths using Obj Hom.
+Forcing Translate apD10 using Obj Hom.
 Forcing Translate sigT using Obj Hom. 
 Forcing Translate prod using Obj Hom. 
 Forcing Translate ID using Obj Hom.
 Forcing Translate id using Obj Hom.
-Forcing Translate IsEquiv' using Obj Hom. 
-
-Definition apD10 {A} {B:A->Type}
-           {f g : forall x, B x} (h: f <> g) :  pointwise_paths f g.
-Proof.
-  destruct h. intro. reflexivity. 
-Defined. 
-
-Definition IsEquiv (A B : Type) (f:A -> B) :=
-  { g:B -> A &
-    prod (pointwise_paths (fun x => g (f x)) (@id _)) 
-         (pointwise_paths (fun x => f (g x)) (@id _)) }.
+Forcing Translate IsEquiv using Obj Hom. 
 
 Axiom funext_ : forall A (B : A -> Type) (f g : forall a, B a),
     IsEquiv _ _ (@apD10 _ _ f g).
 
 Definition funext := forall A (B : A -> Type) (f g : forall a, B a),
-    IsEquiv' _ _ (@apD10' _ _ f g).
+    IsEquiv _ _ (@apD10 _ _ f g).
 
 Forcing Translate funext using Obj Hom.
 
-(* Definition eq__is_eq p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #) *)
-(*     (e:x = y) : forall q f, ᶠeq q (fun r g => A r (f ∘ g)) (fun r g => x r (f ∘ g)) (fun r g => y r (f ∘ g)) q # := *)
-(*   fun q f => match e with eq_refl _ => ᶠeq_refl q (fun r g => A r (f ∘ g)) (fun r g => x r (f ∘ g)) end. *)
-
 Definition eq__is_eq {p A} {x y: forall p0 (f:p ≤ p0), A p0 f p0 #}
-    (e:x <> y) : _eq p A x y :=
-  match e with eq_refl _ => _eq_refl' _ _ _ end.
+    (e:x = y) : eqᶠ p A x y :=
+  match e with eq_refl _ => eq_reflᶠ _ _ _ end.
 
-Definition eq_is_eq_ {p A} {x y: forall p0 (f:p ≤ p0), A p0 f p0 #} (e: _eq p A x y) : x <> y :=
-  match e with _eq_refl' _ _ _ => eq_refl x end. 
-
-Opaque eq__is_eq eq_is_eq_ apD10 apD10' eq_rect_partial.
+Definition eq_is_eq_ {p A} {x y: forall p0 (f:p ≤ p0), A p0 f p0 #} (e: eqᶠ p A x y) : x = y :=
+  match e with eq_reflᶠ _ _ _ => eq_refl x end. 
 
 Definition eq_is_eq_section : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #)
-    (e : x <> y), eq_is_eq_  (eq__is_eq e) = e.
+    (e : x = y), eq_is_eq_  (eq__is_eq e) = e.
 Proof.
-  intros. destruct e. apply eq_refl'. 
+  intros. destruct e. apply eq_refl. 
 Defined. 
 
 Definition eq_is_eq_retraction  p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #)
-            (e : _eq p A x y)  :
-    eq__is_eq (eq_is_eq_ e) <> e.
+            (e : eqᶠ p A x y)  :
+    eq__is_eq (eq_is_eq_ e) = e.
 Proof.
   destruct e. reflexivity.
 Defined. 
 
-Definition concat : forall (A : Type) (x y z : A), x <> y -> y <> z -> x <> z.
+Definition concat : forall (A : Type) (x y z : A), x = y -> y = z -> x = z.
 Proof. 
   destruct 1. exact (@id _).
 Defined.
 
-Definition ap A B (f : A -> B) x y : x <> y -> f x <> f y.
+Definition ap A B (f : A -> B) x y : x = y -> f x = f y.
 Proof. 
   destruct 1. reflexivity.
 Defined. 
 
 Forcing Definition funext_preservation : funext using Obj Hom.
 Proof.
-  intros p A B f g. refine (ᶠexistT _ _ _ _ _).
+  intros p A B f g. refine (existTᶠ _ _ _ _ _).
   - intros.
     apply eq__is_eq.
     apply funext_. intro p1.
     apply funext_. intro α0.
     apply funext_. intro a. 
-    specialize (X p1 α0 a). apply eq_is_eq_ in X.
-    apply apD10 in X. specialize (X p1). apply apD10 in X. exact (X #).
+    specialize (H p1 α0 a). apply eq_is_eq_ in H.
+    apply apD10 in H. specialize (H p1). apply apD10 in H. exact (H #).
   - intros. split.
     + intros p1 α0 e. apply eq__is_eq.
       apply funext_. intro q1. apply funext_. intro α1. simpl. 
       eapply concat; try apply eq_is_eq_retraction. apply ap.
-      set (H0 := funext_ _ _ (fun (p1 : Obj) (α2 : q1 ≤ p1) => f p1 (α ∘ α0 ∘ α1 ∘ α2)) 
+      set (H0 := funext_ _ _
+                         (fun (p1 : Obj) (α2 : q1 ≤ p1) => f p1 (α ∘ α0 ∘ α1 ∘ α2)) 
                          (fun (p1 : Obj) (α2 : q1 ≤ p1) => g p1 (α ∘ α0∘ α1∘ α2))).
       destruct H0 as [H0 (H0',H0'')].
       set (x0 := (eq_is_eq_ (e q1 α1))).
