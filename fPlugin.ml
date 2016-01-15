@@ -111,6 +111,17 @@ let eta_reduce c =
     | _ -> map_constr aux c
   in aux c
 
+let get_mind_globrefs mind =
+  let open Declarations in
+  let mib = Global.lookup_mind mind in
+  let map i body =
+    let ind = IndRef (mind, i) in
+    let map_cons j _ = ConstructRef ((mind, i), j + 1) in
+    ind :: List.mapi map_cons (Array.to_list body.mind_consnames)
+  in
+  let l = List.mapi map (Array.to_list mib.mind_packets) in
+  List.flatten l
+
 let force_translate_inductive cat ind ids =
   (** From a kernel inductive body construct an entry for the inductive. There
       are slight mismatches in the representation, in particular in the handling
@@ -247,7 +258,12 @@ let force_translate_inductive cat ind ids =
   } in
   let (_, kn), _ = Declare.declare_mind mib_ in
   let mib_ = Global.mind_of_delta_kn kn in
-  IndRef (mib_, snd ind)
+  let map_data gr = match gr with
+  | IndRef (mib, i) -> (gr, IndRef (mib_, i))
+  | ConstructRef ((mib, i), j) -> (gr, ConstructRef ((mib_, i), j))
+  | _ -> assert false
+  in
+  List.map map_data (get_mind_globrefs (fst ind))
 
 let force_translate (obj, hom) gr ids =
   let r = gr in
@@ -260,14 +276,7 @@ let force_translate (obj, hom) gr ids =
   } in
   let ans = match gr with
   | ConstRef cst -> force_translate_constant cat cst ids
-  | IndRef ind -> 
-     let env = Global.env () in
-     let ind_gr = force_translate_inductive cat ind ids in
-     let ind_ = destIndRef ind_gr in
-     let _, oib = Inductive.lookup_mind_specif env ind in
-     let ncons = Array.length oib.mind_consnames in
-     let make_cons i = (ConstructRef (ind, i + 1), ConstructRef (ind_, i + 1)) in
-     (gr, ind_gr) :: List.init ncons make_cons
+  | IndRef ind -> force_translate_inductive cat ind ids
   | _ -> error "Translation not handled."
   in
   let () = Lib.add_anonymous_leaf (in_translator ans) in
