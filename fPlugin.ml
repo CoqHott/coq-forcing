@@ -280,6 +280,7 @@ let force_implement (obj, hom) id typ idopt =
   let (typ, uctx) = Constrintern.interp_type env sigma typ in
   let sigma = Evd.from_ctx uctx in
   let (sigma, typ_) = FTranslate.translate_type !translator cat env sigma typ in
+  let (sigma, _) = Typing.type_of env sigma typ_ in
   let hook _ dst =
     (** Declare the original term as an axiom *)
     let param = (None, false, (typ, Evd.evar_context_universe_context uctx), None) in
