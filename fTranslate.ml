@@ -196,9 +196,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   (sigma, lam)
 | Lambda (na, t, u) ->
   (** Translation of t *)
-  let (ext, tfctx) = extend fctx in
-  let (sigma, t_) = otranslate_type env tfctx sigma t in
-  let t_ = it_mkProd_or_LetIn t_ ext in
+  let (sigma, t_) = otranslate_boxed_type env fctx sigma t in
   (** Translation of u *)
   let ufctx = add_variable fctx in
   let (sigma, u_) = otranslate env ufctx sigma u in
@@ -207,14 +205,9 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 | LetIn (na, c, t, u) -> assert false
 | App (t, args) ->
   let (sigma, t_) = otranslate env fctx sigma t in
-  let (ext, ufctx) = extend fctx in
-  let fold sigma u =
-    let (sigma, u_) = otranslate env ufctx sigma u in
-    let u_ = it_mkLambda_or_LetIn u_ ext in
-    (sigma, u_)
-  in
+  let fold sigma u = otranslate_boxed env fctx sigma u in
   let (sigma, args_) = CList.fold_map fold sigma (Array.to_list args) in
-  let app = mkApp (t_, Array.of_list args_) in
+  let app = applist (t_, args_) in
   (sigma, app)
 | Var id ->
   apply_global env sigma (VarRef id) Univ.Instance.empty fctx
@@ -245,6 +238,18 @@ and otranslate_type env fctx sigma t =
   let (sigma, t_) = otranslate env fctx sigma t in
   let last = mkRel (last_condition fctx) in
   let t_ = mkOptApp (t_, [| last; refl fctx.category last |]) in
+  (sigma, t_)
+
+and otranslate_boxed env fctx sigma t =
+  let (ext, ufctx) = extend fctx in
+  let (sigma, t_) = otranslate env ufctx sigma t in
+  let t_ = it_mkLambda_or_LetIn t_ ext in
+  (sigma, t_)
+
+and otranslate_boxed_type env fctx sigma t =
+  let (ext, ufctx) = extend fctx in
+  let (sigma, t_) = otranslate_type env ufctx sigma t in
+  let t_ = it_mkProd_or_LetIn t_ ext in
   (sigma, t_)
 
 let empty translator cat lift env =
