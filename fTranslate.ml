@@ -200,7 +200,12 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let (sigma, u_) = otranslate env ufctx sigma u in
   let ans = mkLambda (na, t_, u_) in
   (sigma, ans)
-| LetIn (na, c, t, u) -> assert false
+| LetIn (na, c, t, u) ->
+  let (sigma, c_) = otranslate_boxed env fctx sigma c in
+  let (sigma, t_) = otranslate_boxed_type env fctx sigma t in
+  let ufctx = add_variable fctx in
+  let (sigma, u_) = otranslate env ufctx sigma u in
+  (sigma, mkLetIn (na, c_, t_, u_))
 | App (t, args) ->
   let (sigma, t_) = otranslate env fctx sigma t in
   let fold sigma u = otranslate_boxed env fctx sigma u in

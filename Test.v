@@ -55,3 +55,7 @@ Proof.
 compute.
 exact nilᶠ.
 Defined.
+
+Definition test_let := let X := forall A, A in X -> X.
+
+Forcing Translate test_let using Obj Hom.
