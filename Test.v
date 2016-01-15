@@ -31,26 +31,27 @@ Forcing Translate list using Obj Hom.
 Forcing Translate sum using Obj Hom.
 Forcing Translate nat using Obj Hom.
 
-Scheme ᶠnat_rect := Induction for ᶠnat Sort Type.
+Scheme natᶠ_rect := Induction for natᶠ Sort Type.
 
 Forcing Definition idn : nat -> nat using Obj Hom.
 Proof.
   intros p n.
   specialize (n p #).
   induction n as [|p n IHn].
-  + apply ᶠO.
-  + apply ᶠS, IHn.
+  + apply Oᶠ.
+  + apply Sᶠ, IHn.
 Defined.  
 
 Print sum.
-Print ᶠsum.
+Print sumᶠ.
 
 Definition baz := sum Type Type.
 Forcing Translate baz using Obj Hom.
 
-Print ᶠbaz.
+Print bazᶠ.
 
 Forcing Definition mlk : forall A, list A using Obj Hom.
+Proof.
 compute.
-exact ᶠnil.
+exact nilᶠ.
 Defined.
