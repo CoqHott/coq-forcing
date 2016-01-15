@@ -125,6 +125,8 @@ let translate_var fctx n =
   let m = get_var_shift n fctx in
   mkApp (mkRel m, [| p; f |])
 
+(* let lift_decl i (na, b, t) = (na, Option.map (Vars.lift i) b, Vars.lift i t) *)
+
 let apply_global env sigma gr u fctx =
   (** FIXME *)
   let p' =
@@ -137,19 +139,22 @@ let apply_global env sigma gr u fctx =
   | IndRef _ ->
     let cat = fctx.category in
     let (_, oib) = Inductive.lookup_mind_specif env (fst (destInd c)) in
-    let narity = List.length oib.mind_arity_ctxt - 1 in
+    (** First parameter is the toplevel forcing condition *)
     let _, paramtyp = CList.sep_last oib.mind_arity_ctxt in
+    let nparams = List.length paramtyp in
     let fctx = List.fold_left (fun accu _ -> add_variable accu) fctx paramtyp in
     let (ext, fctx) = extend fctx in
     let mk_var n =
-      let n = n + 1 in
+      let n = nparams - n in
       let (ext0, fctx) = extend fctx in
       let ans = translate_var fctx n in
       it_mkLambda_or_LetIn ans ext0
     in
-    let params = CList.init narity mk_var in
-    let app = applist (c, mkRel 2 :: params) in
-    let paramtyp = List.mapi (fun i (x, o, t) -> (x, o, Vars.subst1 (mkRel last) t)) paramtyp in
+    let params = CList.init nparams mk_var in
+    let app = applist (c, mkRel (last_condition fctx) :: params) in
+    let map_p i c = Vars.substnl_decl [mkRel (last - i)] (nparams - i - 1) c in
+(*     let map_p i c = Vars.substnl_decl [mkProp] (last - i - 1) c in *)
+    let paramtyp = List.mapi map_p paramtyp in
     let ans = it_mkLambda_or_LetIn app (ext @ paramtyp) in
     msg_info (Termops.print_constr ans);
     (sigma, ans)

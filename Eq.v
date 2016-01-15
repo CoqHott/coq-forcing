@@ -15,6 +15,7 @@ where "x = y :> A" := (@eq A x y) : type_scope.
 Notation "x = y" := (x = y :>_) : type_scope.
 
 Forcing Translate eq using Obj Hom.
+Forcing Definition foo : forall A (x : A), x = x using Obj Hom.
 
 Definition eq_rec_ p
          (A P : forall p0 : Obj, p ≤ p0 -> forall p1 : Obj, p0 ≤ p1 -> Type)
