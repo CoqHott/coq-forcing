@@ -25,20 +25,20 @@ Definition pointwise_paths {A} {P:A->Type} (f g:forall x:A, P x)
 
 Notation "f == g" := (pointwise_paths f g) (at level 70, no associativity) : type_scope.
 
-Forcing Definition eq_rect_partial : forall A (x :A) (P : A -> Type),
+Forcing Definition leibniz : forall A (x :A) (P : A -> Type),
     P x ->
     forall y (e:x = y), P y using Obj Hom.
 Proof.
   intros p A x P P_refl y e.
-  exact (match e p # in ᶠeq _ _ _ y' q f return P p # y' q f
-         with | ᶠeq_refl _ _ _ => P_refl p # end).
+  exact (match e p # in eqᶠ _ _ _ y'  return P p # y' p #
+         with | eq_reflᶠ _ _ _ => P_refl p # end).
 Defined.
 
 Definition apD10 {A} {B:A->Type}
            {f g : forall x, B x} (h: f = g) :
   f == g.
 Proof.
-  refine (eq_rect_partial _ f (fun g => f == g) _ g h).
+  refine (leibniz _ f (fun g => f == g) _ g h).
   intro. apply eq_refl. 
 Defined. 
 
@@ -54,13 +54,13 @@ Definition funext_simpl := forall A (B : A -> Type) (f g : forall a, B a),
 Forcing Translate funext_simpl using Obj Hom.
 
 Definition eq__is_eq : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #),
-    x = y -> ᶠeq p _ x y p #.
+    x = y -> eqᶠ p _ x y.
 Proof.
-  intros. destruct H. apply ᶠeq_refl.
+  intros. destruct H. apply eq_reflᶠ.
 Defined.
 
 Definition eq_is_eq_ : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #),
-   ᶠeq p _ x y p # -> x = y.
+    eqᶠ p _ x y -> x = y.
 Proof.
   intros. destruct H. apply eq_refl.
 Defined.
@@ -73,7 +73,7 @@ Proof.
   apply funext_simpl_. intro α0.
   apply funext_simpl_. intro a. 
   specialize (X p1 α0 a). apply eq_is_eq_ in X.
-    apply apD10 in X. specialize (X p1). apply apD10 in X. exact (X #).
+  apply apD10 in X. specialize (X p1). apply apD10 in X. exact (X #).
 
 Defined.
 
