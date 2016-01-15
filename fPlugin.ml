@@ -67,7 +67,12 @@ let force_solve cat c =
     Proofview.Refine.refine_casted begin fun h -> (h, ans) end
   end
 
-let force_translate_constant cat cst id =
+let force_translate_constant cat cst ids =
+  let id = match ids with
+  | None -> translate_name (Nametab.basename_of_global (ConstRef cst))
+  | Some [id] -> id
+  | Some _ -> error "Not the right number of provided names"
+  in
   (** Translate the type *)
   let typ = Universes.unsafe_type_of_global (ConstRef cst) in
   let env = Global.env () in
@@ -106,7 +111,7 @@ let eta_reduce c =
     | _ -> map_constr aux c
   in aux c
 
-let force_translate_inductive cat ind =
+let force_translate_inductive cat ind ids =
   (** From a kernel inductive body construct an entry for the inductive. There
       are slight mismatches in the representation, in particular in the handling
       of contexts. See {!Declarations} and {!Entries}. *)
@@ -190,12 +195,20 @@ let force_translate_inductive cat ind =
       let sigma, b = Reductionops.infer_conv ~pb:Reduction.CUMUL envtyp_ sigma ty s in
       (sigma, eta_reduce typ_ :: lc_)
     in
+    let typename, consnames = match ids with
+    | None ->
+      (translate_name body.mind_typename, CArray.map_to_list translate_name body.mind_consnames)
+    | Some ids when List.length ids = Array.length body.mind_consnames + 1 ->
+      (List.hd ids, List.tl ids)
+    | _ ->
+      error "Not the right number of provided names"
+    in
     let (sigma, lc_) = Array.fold_left fold_lc (sigma, []) body.mind_user_lc in
     let body_ = {
-      mind_entry_typename = translate_name body.mind_typename;
+      mind_entry_typename = typename;
       mind_entry_arity = arity;
       mind_entry_template = template;
-      mind_entry_consnames = CArray.map_to_list translate_name body.mind_consnames;
+      mind_entry_consnames = consnames;
       mind_entry_lc = List.rev lc_;
     } in
     (sigma, body_ :: bodies_)
@@ -236,7 +249,7 @@ let force_translate_inductive cat ind =
   let mib_ = Global.mind_of_delta_kn kn in
   IndRef (mib_, snd ind)
 
-let force_translate (obj, hom) gr idopt =
+let force_translate (obj, hom) gr ids =
   let r = gr in
   let gr = Nametab.global gr in
   let obj = Universes.constr_of_global (Nametab.global obj) in
@@ -245,15 +258,11 @@ let force_translate (obj, hom) gr idopt =
     FTranslate.cat_obj = obj;
     FTranslate.cat_hom = hom;
   } in
-  let id = match idopt with
-  | None -> translate_name (Nametab.basename_of_global gr)
-  | Some id -> id
-  in
   let ans = match gr with
-  | ConstRef cst -> force_translate_constant cat cst id
+  | ConstRef cst -> force_translate_constant cat cst ids
   | IndRef ind -> 
      let env = Global.env () in
-     let ind_gr = force_translate_inductive cat ind in
+     let ind_gr = force_translate_inductive cat ind ids in
      let ind_ = destIndRef ind_gr in
      let _, oib = Inductive.lookup_mind_specif env ind in
      let ncons = Array.length oib.mind_consnames in
