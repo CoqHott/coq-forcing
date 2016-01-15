@@ -119,7 +119,11 @@ let add_variable fctx =
 
 (** Handling of globals *) 
 
-
+let translate_var fctx n =
+  let p = mkRel (last_condition fctx) in
+  let f = morphism_var n fctx in
+  let m = get_var_shift n fctx in
+  mkApp (mkRel m, [| p; f |])
 
 let apply_global env sigma gr u fctx =
   (** FIXME *)
@@ -140,10 +144,7 @@ let apply_global env sigma gr u fctx =
     let mk_var n =
       let n = n + 1 in
       let (ext0, fctx) = extend fctx in
-      let p = mkRel (last_condition fctx) in
-      let f = morphism_var n fctx in
-      let m = get_var_shift n fctx in
-      let ans = mkApp (mkRel m, [| p; f |]) in
+      let ans = translate_var fctx n in
       it_mkLambda_or_LetIn ans ext0
     in
     let params = CList.init narity mk_var in
@@ -158,10 +159,7 @@ let apply_global env sigma gr u fctx =
 
 let rec otranslate env fctx sigma c = match kind_of_term c with
 | Rel n ->
-  let p = mkRel (last_condition fctx) in
-  let f = morphism_var n fctx in
-  let m = get_var_shift n fctx in
-  let ans = mkApp (mkRel m, [| p; f |]) in
+  let ans = translate_var fctx n in
   (sigma, ans)
 | Sort s ->
   let (ext0, fctx) = extend fctx in
