@@ -18,7 +18,7 @@ Fixpoint nat_rec_ (p : Obj)
   (HS : forall (p0 : Obj) (α : p ≤ p0),
        (forall (p : Obj) (α0 : p0 ≤ p), P p (α ∘ α0) p #) ->
        P p0 (fun (R : Obj) (k : Hom p0 R) => α R k) p0 #)
-  q f (n : ᶠnat p q f):
+  (n : ᶠnat p):
    P p # p # := match n with
             | ᶠO _ =>    H0 p #
             | ᶠS _ n0 => HS p #
@@ -27,14 +27,14 @@ Fixpoint nat_rec_ (p : Obj)
                         (fun p1 f1 => P  p1 (α1 ∘ f1))
                         (fun p1 f1 => H0 p1 (α1 ∘ f1))
                         (fun p1 f1 => HS p1 (α1 ∘ f1))
-                        _ _ (n0 p1 α1))
+                        (n0 p1 α1))
             end.
 
 
 Forcing Definition nat_rec : forall (P : Type), P -> (P -> P) -> nat -> P using Obj Hom.
 Proof.
   intros p P H0 HS n. 
-  exact (nat_rec_ p P H0 HS p # (n p #)).
+  exact (nat_rec_ p P H0 HS (n p #)).
 Defined.
 
 Definition foo := fun (P : Type) (H0 : P) (HS : P -> P) => nat_rec P H0 HS O.
@@ -70,12 +70,12 @@ Proof.
   
   set (Type_of_P := fun p => forall p0 : Obj,
       p ≤ p0 ->
-      (forall p : Obj, p0 ≤ p -> ᶠnat p p #) ->
+      (forall p : Obj, p0 ≤ p -> ᶠnat p) ->
       forall p : Obj, p0 ≤ p -> Type).
   set (Type_of_H0 := fun p (P:Type_of_P p) => forall (p0 : Obj) (α : p ≤ p0),
        P p0 (# ∘ (α ∘ #)) (fun (p : Obj) (_ : p0 ≤ p) => ᶠO p) p0 #).
   set (Type_of_HS := fun p (P:Type_of_P p) => forall (p0 : Obj) (α : p ≤ p0)
-         (n : forall p : Obj, p0 ≤ p -> ᶠnat p p #),
+         (n : forall p : Obj, p0 ≤ p -> ᶠnat p),
        (forall (p1 : Obj) (α0 : p0 ≤ p1),
         ᶠnat_mem p1
           (fun (p : Obj) (_ : p1 ≤ p) (p2 : Obj) (_ : p ≤ p2) =>
@@ -93,17 +93,17 @@ Proof.
          (fun (p1 : Obj) (α0 : p0 ≤ p1) =>
           P p1 (# ∘ (# ∘ (α ∘ (# ∘ (# ∘ (α0 ∘ #))))))) p0 
          #).
-  set (Type_of_Goal := fun p (P:Type_of_P p) (H0:Type_of_H0 p P) (HS:Type_of_HS p P) q f (n0: ᶠnat p q f) => nat_rec_ p
+  set (Type_of_Goal := fun p (P:Type_of_P p) (H0:Type_of_H0 p P) (HS:Type_of_HS p P) (n0: ᶠnat p) => nat_rec_ p
      (fun (p0 : Obj) (_ : p ≤ p0) (p1 : Obj) (_ : p0 ≤ p1) =>
       (forall p2 : Obj,
        p1 ≤ p2 ->
-       (forall p3 : Obj, p2 ≤ p3 -> ᶠnat p3 p3 #) ->
+       (forall p3 : Obj, p2 ≤ p3 -> ᶠnat p3) ->
        forall p3 : Obj, p2 ≤ p3 -> Type) ->
       forall p2 : Obj, p1 ≤ p2 -> Type)
      (fun (p0 : Obj) (_ : p ≤ p0)
         (f : forall p1 : Obj,
              p0 ≤ p1 ->
-             (forall p2 : Obj, p1 ≤ p2 -> ᶠnat p2 p2 #) ->
+             (forall p2 : Obj, p1 ≤ p2 -> ᶠnat p2) ->
              forall p2 : Obj, p1 ≤ p2 -> Type) =>
       f p0 # (fun (p1 : Obj) (_ : p0 ≤ p1) => ᶠO p1))
      (fun (p0 : Obj) (_ : p ≤ p0)
@@ -111,24 +111,24 @@ Proof.
              p0 ≤ p1 ->
              (forall p2 : Obj,
               p1 ≤ p2 ->
-              (forall p3 : Obj, p2 ≤ p3 -> ᶠnat p3 p3 #) ->
+              (forall p3 : Obj, p2 ≤ p3 -> ᶠnat p3) ->
               forall p3 : Obj, p2 ≤ p3 -> Type) ->
              forall p2 : Obj, p1 ≤ p2 -> Type)
         (f : forall p1 : Obj,
              p0 ≤ p1 ->
-             (forall p2 : Obj, p1 ≤ p2 -> ᶠnat p2 p2 #) ->
+             (forall p2 : Obj, p1 ≤ p2 -> ᶠnat p2) ->
              forall p2 : Obj, p1 ≤ p2 -> Type) =>
       H p0 #
         (fun (p1 : Obj) (α0 : p0 ≤ p1)
-           (n : forall p2 : Obj, p1 ≤ p2 -> ᶠnat p2 p2 #) =>
+           (n : forall p2 : Obj, p1 ≤ p2 -> ᶠnat p2) =>
          f p1 (fun (R : Obj) (k : Hom p1 R) => α0 R k)
            (fun (p2 : Obj) (α1 : p1 ≤ p2) =>
-            ᶠS p2 (fun (p3 : Obj) (α2 : p2 ≤ p3) => n p3 (α1 ∘ α2))))) q f n0
+            ᶠS p2 (fun (p3 : Obj) (α2 : p2 ≤ p3) => n p3 (α1 ∘ α2))))) n0
      (fun (p0 : Obj) (α : p ≤ p0) =>
       P p0 (fun (R : Obj) (k : Hom p0 R) => α R k)) p 
      #).
 
-  change (Type_of_Goal p P H0 HS p # n0).
+  change (Type_of_Goal p P H0 HS n0).
 
   revert p P H0 HS n0.
   compute. 
@@ -137,8 +137,8 @@ Proof.
               (P : Type_of_P p)
               (H0 : Type_of_H0 p P)
               (HS : Type_of_HS p P)
-              (n0 : ᶠnat p p #) : Type_of_Goal p P H0 HS p # n0
-             := match n0 as n1 in ᶠnat _ q f return Type_of_Goal p P H0 HS q f n1 with
+              (n0 : ᶠnat p) : Type_of_Goal p P H0 HS n0
+             := match n0 as n1 in ᶠnat _ return Type_of_Goal p P H0 HS n1 with
             | ᶠO _ =>   H0 p #
             | ᶠS _ n => HS p # n
                    (fun (p1 : Obj) (α1 : p ≤ p1) =>
