@@ -2,6 +2,7 @@ open Names
 open Term
 open Environ
 open Globnames
+open Pp
 
 type translator = global_reference Refmap.t
 exception MissingGlobal of global_reference
@@ -116,7 +117,9 @@ let extend fctx =
 let add_variable fctx =
   { fctx with context = Variable :: fctx.context }
 
-(** Handling of globals *)
+(** Handling of globals *) 
+
+
 
 let apply_global env sigma gr u fctx =
   (** FIXME *)
@@ -126,7 +129,30 @@ let apply_global env sigma gr u fctx =
   in
   let (sigma, c) = Evd.fresh_global env sigma p' in
   let last = last_condition fctx in
-  (sigma, mkApp (c, [| mkRel last |]))
+  match gr with
+  | IndRef _ ->
+    let cat = fctx.category in
+    let (_, oib) = Inductive.lookup_mind_specif env (fst (destInd c)) in
+    let narity = List.length oib.mind_arity_ctxt - 1 in
+    let _, paramtyp = CList.sep_last oib.mind_arity_ctxt in
+    let fctx = List.fold_left (fun accu _ -> add_variable accu) fctx paramtyp in
+    let (ext, fctx) = extend fctx in
+    let mk_var n =
+      let n = n + 1 in
+      let (ext0, fctx) = extend fctx in
+      let p = mkRel (last_condition fctx) in
+      let f = morphism_var n fctx in
+      let m = get_var_shift n fctx in
+      let ans = mkApp (mkRel m, [| p; f |]) in
+      it_mkLambda_or_LetIn ans ext0
+    in
+    let params = CList.init narity mk_var in
+    let app = applist (c, mkRel 2 :: params) in
+    let paramtyp = List.mapi (fun i (x, o, t) -> (x, o, Vars.subst1 (mkRel last) t)) paramtyp in
+    let ans = it_mkLambda_or_LetIn app (ext @ paramtyp) in
+    msg_info (Termops.print_constr ans);
+    (sigma, ans)
+  | _ -> (sigma, mkApp (c, [| mkRel last |]))
 
 (** Forcing translation core *)
 
@@ -197,15 +223,16 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 | Construct (c, u) ->
   apply_global env sigma (ConstructRef c) u fctx
 | Case (ci, c, r, p) ->
-   let (sigma, c_) = otranslate env fctx sigma c in
-   let (sigma, r_) = otranslate_type env fctx sigma r in
-   let fold sigma u =
-    let (sigma, u_) = otranslate env fctx sigma u in
-    (sigma, u_)
-   in
-   let (sigma, p_) = CList.fold_map fold sigma (Array.to_list p) in
-   let p_ = Array.of_list p_ in
-   (sigma, mkCase (ci, c_, r_, p_))
+   (* let (sigma, c_) = otranslate env fctx sigma c in *)
+   (* let (sigma, r_) = otranslate_type env fctx sigma r in *)
+   (* let fold sigma u = *)
+   (*  let (sigma, u_) = otranslate env fctx sigma u in *)
+   (*  (sigma, u_) *)
+   (* in *)
+   (* let (sigma, p_) = CList.fold_map fold sigma (Array.to_list p) in *)
+   (* let p_ = Array.of_list p_ in *)
+   (* (sigma, mkCase (ci, c_, r_, p_)) *)
+   assert false
 | Fix f -> assert false
 | CoFix f -> assert false
 | Proj (p, c) -> assert false
