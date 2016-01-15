@@ -85,8 +85,8 @@ let force_translate_constant cat cst id =
   let ce = Declare.definition_entry ~types:typ ~univs:uctx body in
   let cd = Entries.DefinitionEntry ce in
   let decl = (cd, IsProof Lemma) in
-  let cst = Declare.declare_constant id decl in
-  ConstRef cst
+  let cst_ = Declare.declare_constant id decl in
+  [ConstRef cst, ConstRef cst_]
 
 let eta_reduce c =
   let rec aux c =
@@ -256,17 +256,17 @@ let force_translate (obj, hom) gr idopt =
      let ind_gr = force_translate_inductive cat ind in
      let ind_ = destIndRef ind_gr in
      let _, oib = Inductive.lookup_mind_specif env ind in
-     let () = Array.iteri (fun i _ -> Lib.add_anonymous_leaf (in_translator [ConstructRef (ind, i+1), ConstructRef (ind_, i+1)])) oib.mind_consnames in
-     let ind_name = oib.mind_typename in 
-     
-     ind_gr  
+     let ncons = Array.length oib.mind_consnames in
+     let make_cons i = (ConstructRef (ind, i + 1), ConstructRef (ind_, i + 1)) in
+     (gr, ind_gr) :: List.init ncons make_cons
   | _ -> error "Translation not handled."
   in
-  let () = Lib.add_anonymous_leaf (in_translator [gr, ans]) in
-  let () = Pp.msg_info (str "Global " ++ Libnames.pr_reference r ++
-    str " has been translated as " ++ Nameops.pr_id id ++ str ".")
+  let () = Lib.add_anonymous_leaf (in_translator ans) in
+  let msg_translate (src, dst) =
+    Pp.msg_info (str "Global " ++ Printer.pr_global src ++
+    str " has been translated as " ++ Printer.pr_global dst ++ str ".")
   in
-  ()
+  List.iter msg_translate ans
 
 (** Implementation in the forcing layer *)
 
