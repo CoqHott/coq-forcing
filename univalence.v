@@ -45,20 +45,19 @@ Proof.
   - split. all : intro; reflexivity. 
 Defined.
 
-
-Forcing Definition eq_rect_partial : forall A (x :A) (P : A -> Type),
+Forcing Definition leibniz : forall A (x :A) (P : A -> Type),
     P x ->
     forall y (e:x = y), P y using Obj Hom.
 Proof.
   intros p A x P P_refl y e.
-  exact (match e p # in ᶠeq _ _ _ y' q f return P p # y' q f
-         with | ᶠeq_refl _ _ _ => P_refl p # end).
+  exact (match e p # in eqᶠ _ _ _ y' return P p # y' p #
+         with | eq_reflᶠ _ _ _ => P_refl p # end).
 Defined.
 
 Definition path_to_equiv (A B : Type) :
   A = B -> {f : A -> B & IsEquiv A B f}.
 Proof.
-  refine (eq_rect_partial Type A (fun B => {f : A -> B & IsEquiv A B f}) _ B).
+  refine (leibniz Type A (fun B => {f : A -> B & IsEquiv A B f}) _ B).
   refine (existT _ _ _).
   - exact (@id _).
   - exact (IsEquiv_id _).
@@ -77,7 +76,6 @@ Forcing Translate IsEquiv_id using Obj Hom.
 Forcing Translate path_to_equiv using Obj Hom.
 Forcing Translate univalence using Obj Hom.
 
-
 Fixpoint even n := match n with 0 => true | 1 => false | S (S n) => even n end.
 
 Definition A₀ := fun p q (α : p ≤ q) r (β : q ≤ r) => if r then True else False.
@@ -88,13 +86,13 @@ Definition neg (b:bool) : bool := if b then false else true.
 Axiom funext_ : forall A (B : A -> Type) (f g : forall a, B a), f == g -> f = g.
 
 Definition eq__is_eq : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #),
-    x = y -> ᶠeq p _ x y p #.
+    x = y -> eqᶠ p _ x y.
 Proof.
-  intros. destruct H. apply ᶠeq_refl.
+  intros. destruct H. apply eq_reflᶠ.
 Defined.
 
 Definition eq_is_eq_ : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #),
-   ᶠeq p _ x y p # -> x = y.
+   eqᶠ p _ x y -> x = y.
 Proof.
   intros. destruct H. apply eq_refl.
 Defined. 
@@ -115,7 +113,7 @@ Proof.
   intros. specialize (H (neg p0) (fun _ _ => tt)). destruct p0; exact H.
 
   refine (let H := _ : (forall (p0 : Obj) (α : p ≤ p0),
-           ᶠsigT p0
+           sigTᶠ p0
              (fun (p1 : Obj) (α0 : p0 ≤ p1) (p2 : Obj) (α1 : p1 ≤ p2) =>
               (forall (p3 : Obj) (α2 : p2 ≤ p3),
                A₀ p p3 (# ∘ (# ∘ (α ∘ (α0 ∘ (α1 ∘ (α2 ∘ #)))))) p3 #) ->
@@ -127,16 +125,15 @@ Proof.
                         (# ∘ (# ∘ (α ∘ (α0 ∘ (α1 ∘ (# ∘ (α2 ∘ #))))))) p3
                         #) ->
                      A₁ p p2 (# ∘ (α ∘ (α0 ∘ (α1 ∘ (# ∘ #))))) p2 #) =>
-              ᶠIsEquiv p1
+              IsEquivᶠ p1
                 (fun (p2 : Obj) (α1 : p1 ≤ p2) =>
                  A₀ p p2 (# ∘ (# ∘ (α ∘ (α0 ∘ (α1 ∘ #))))))
                 (fun (p2 : Obj) (α1 : p1 ≤ p2) =>
                  A₁ p p2 (# ∘ (α ∘ (α0 ∘ (α1 ∘ #)))))
-                (fun (p : Obj) (α1 : p1 ≤ p) => f p (α1 ∘ #))) p0 
-             #) in _). 
+                (fun (p : Obj) (α1 : p1 ≤ p) => f p (α1 ∘ #)))) in _). 
 
-  intros. refine (ᶠexistT _ _ _ _ _). exact f.
-  intros. refine (ᶠexistT _ _ _ _ _). exact g.
+  intros. refine (existTᶠ _ _ _ _ _). exact f.
+  intros. refine (existTᶠ _ _ _ _ _). exact g.
 
     (* Dealing with section and retraction *)
 
