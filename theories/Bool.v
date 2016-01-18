@@ -11,14 +11,14 @@ Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40)
 
 Forcing Translate bool using Obj Hom.
 
-Forcing Definition bool_rec : forall P, P -> P -> bool -> P using Obj Hom.
-Proof.
-intros p P Ptt Pff b.
-destruct (b p #); [apply Ptt|apply Pff].
-Defined.
+Definition bool_rec : forall P, P -> P -> bool -> P := fun P Ptt Pff b => match b with true => Ptt | false => Pff end.
+
+Fail Forcing Translate bool_rec using Obj Hom.
 
 Definition bool_mem : forall R, bool -> (bool -> R) -> R :=
   fun R b => bool_rec ((bool -> R) -> R) (fun k => k true) (fun k => k false) b.
+
+(*
 
 Forcing Translate bool_mem using Obj Hom.
 
@@ -30,5 +30,6 @@ compute.
 destruct (b p #); [apply Ptt|apply Pff].
 Fail Defined. (** stupid universe errors *)
 Abort.
+*)
 
 End Bool.

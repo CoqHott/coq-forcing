@@ -220,17 +220,36 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   apply_global env sigma (IndRef i) u fctx
 | Construct (c, u) ->
   apply_global env sigma (ConstructRef c) u fctx
-| Case (ci, c, r, p) ->
-   (* let (sigma, c_) = otranslate env fctx sigma c in *)
-   (* let (sigma, r_) = otranslate_type env fctx sigma r in *)
-   (* let fold sigma u = *)
-   (*  let (sigma, u_) = otranslate env fctx sigma u in *)
-   (*  (sigma, u_) *)
-   (* in *)
-   (* let (sigma, p_) = CList.fold_map fold sigma (Array.to_list p) in *)
-   (* let p_ = Array.of_list p_ in *)
-   (* (sigma, mkCase (ci, c_, r_, p_)) *)
-   assert false
+| Case (ci, r, c, p) ->
+  let ind_ = match Refmap.find (IndRef ci.ci_ind) fctx.translator with
+  | IndRef i -> i
+  | _ -> assert false
+  | exception Not_found -> raise (MissingGlobal (IndRef ci.ci_ind))
+  in
+  let ci_ = Inductiveops.make_case_info env ind_ ci.ci_pp_info.style in
+  let (sigma, c_) = otranslate env fctx sigma c in
+
+  (** The return clause must be mangled for the last variable *)
+  let (sigma, r_) = otranslate env fctx sigma r in
+  let (args, r_) = decompose_lam_assum r_ in
+  let ((na, _, self), args) = match args with h :: t -> (h, t) | _ -> assert false in
+  (** Remove the forall boxing *)
+  let self_ = match decompose_prod_n 2 self with
+  | ([_; _], c) -> c
+  | exception _ -> assert false
+  in
+  let last = mkRel (last_condition fctx + List.length args) in
+  let (ext, _) = extend fctx in
+  let r_ = Vars.subst1 (it_mkLambda_or_LetIn (mkRel 1) ext) r_ in
+  let c = Vars.substl [refl fctx.category last; last] c in
+  let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in
+  msg_info (Termops.print_constr r);
+  msg_info (Termops.print_constr r_);
+
+  let fold sigma u = otranslate env fctx sigma u in
+  let (sigma, p_) = CList.fold_map fold sigma (Array.to_list p) in
+  let p_ = Array.of_list p_ in
+  (sigma, mkCase (ci_, r_, c_, p_))
 | Fix f -> assert false
 | CoFix f -> assert false
 | Proj (p, c) -> assert false
