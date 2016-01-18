@@ -6,7 +6,9 @@ This is a plugin for Coq v8.5 that implements the call-by-name forcing translati
 
 ## Install
 
-You need Coq v8.5 development files. Echoing ```make``` should be enough.
+You need Coq v8.5 development files. The ```COQBIN``` environment variable
+should be pointing to the Coq binaries folder. Echoing ```make``` should be
+enough then.
 
 ## Use
 
@@ -33,13 +35,13 @@ Note that the translation may generate several new constants, for instance in th
 
 
 ```
-Forcing Implement foo : type using Obj Hom.
+Forcing Definition foo : type using Obj Hom.
 ```
 
 This command  starts the proof mode and let the user provide a term whose type is the forcing translation of ```type```. When the proof is finished, an axiom ```foo``` is added to the environment and the term provided by the user is added as the forcing translation of ```foo```.
 
 ```
-Forcing Implement foo : type as id using Obj Hom.
+Forcing Definition foo : type as id using Obj Hom.
 ```
 
 Same as above but allows to give a name to the translated constant instead of the automatic ```fooᶠ```.
