@@ -125,9 +125,14 @@ let translate_var fctx n =
   let m = get_var_shift n fctx in
   mkApp (mkRel m, [| p; f |])
 
+let rec untranslate_rel n c = match Constr.kind c with
+| App (t, args) when isRel t && Array.length args >= 2 ->
+  c
+| _ -> Constr.map_with_binders succ untranslate_rel n c
+
 let fix_return_clause env fctx sigma r_ =
   (** The return clause must be mangled for the last variable *)
-  msg_info (Termops.print_constr r_);
+(*   msg_info (Termops.print_constr r_); *)
   let (args, r_) = decompose_lam_assum r_ in
   let ((na, _, self), args) = match args with h :: t -> (h, t) | _ -> assert false in
   (** Remove the forall boxing *)
@@ -137,10 +142,11 @@ let fix_return_clause env fctx sigma r_ =
   in
   let last = last_condition fctx + List.length args in
   let (ext, _) = extend fctx in
-(*   let r_ = Vars.subst1 (*(it_mkLambda_or_LetIn (mkRel 3) ext)*) mkProp r_ in *)
+  let r_ = untranslate_rel 1 r_ in
   let r_ = mkApp (r_, [| mkRel (last + 1); refl fctx.category (mkRel (last + 1)) |]) in
   let self_ = Vars.substl [refl fctx.category (mkRel last); (mkRel last)] self_ in
   let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in
+  msg_info (str "FINAL");
   msg_info (Termops.print_constr r_);
   (sigma, r_)
 
@@ -172,7 +178,7 @@ let apply_global env sigma gr u fctx =
     let map_p i c = Vars.substnl_decl [mkRel last] (nparams - i - 1) c in
     let paramtyp = List.mapi map_p paramtyp in
     let ans = it_mkLambda_or_LetIn app (ext @ paramtyp) in
-    msg_info (Termops.print_constr ans);
+(*     msg_info (Termops.print_constr ans); *)
     (sigma, ans)
   | _ -> (sigma, mkApp (c, [| mkRel last |]))
 

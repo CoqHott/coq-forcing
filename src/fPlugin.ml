@@ -61,7 +61,7 @@ let force_solve cat c =
     let env = Proofview.Goal.env gl in
     let sigma = Proofview.Goal.sigma gl in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
-    msg_info (Termops.print_constr ans);
+(*     msg_info (Termops.print_constr ans); *)
     let sigma, _ = Typing.type_of env sigma ans in
     Proofview.Unsafe.tclEVARS sigma <*>
     Proofview.Refine.refine_casted begin fun h -> (h, ans) end
@@ -83,7 +83,7 @@ let force_translate_constant cat cst ids =
   (** Define the term by tactic *)
   let body = Option.get (Global.body_of_constant cst) in
   let (sigma, body) = FTranslate.translate !translator cat env sigma body in
-  msg_info (Termops.print_constr body);
+(*   msg_info (Termops.print_constr body); *)
   let evdref = ref sigma in
   let () = Typing.check env evdref body typ in
   let sigma = !evdref in
@@ -241,7 +241,7 @@ let force_translate_inductive cat ind ids =
     in
     List.iter pr_constructor cs
   in
-  List.iter debug bodies_;
+(*   List.iter debug bodies_; *)
   let make_param = function
   | (na, None, t) -> (Nameops.out_name na, LocalAssum t)
   | (na, Some body, _) -> (Nameops.out_name na, LocalDef body)
