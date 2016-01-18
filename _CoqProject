@@ -1,16 +1,20 @@
--R . Forcing
--I .
-fTranslate.ml
-fTranslate.mli
-fPlugin.ml
-fPlugin.mli
-g_forcing.ml4
-forcing.mllib
-Forcing.v
-Test.v
-Sigma.v
-Bool.v
-Nat.v
-Eq.v
-List.v
-NegPropExt.v
+-R theories/ Forcing
+-I src/
+
+src/fTranslate.ml
+src/fTranslate.mli
+src/fPlugin.ml
+src/fPlugin.mli
+src/g_forcing.ml4
+src/forcing.mllib
+
+theories/Forcing.v
+
+theories/Sigma.v
+theories/Bool.v
+theories/Nat.v
+theories/Eq.v
+theories/List.v
+theories/NegPropExt.v
+
+test/Test.v
