@@ -125,7 +125,24 @@ let translate_var fctx n =
   let m = get_var_shift n fctx in
   mkApp (mkRel m, [| p; f |])
 
-(* let lift_decl i (na, b, t) = (na, Option.map (Vars.lift i) b, Vars.lift i t) *)
+let fix_return_clause env fctx sigma r_ =
+  (** The return clause must be mangled for the last variable *)
+  msg_info (Termops.print_constr r_);
+  let (args, r_) = decompose_lam_assum r_ in
+  let ((na, _, self), args) = match args with h :: t -> (h, t) | _ -> assert false in
+  (** Remove the forall boxing *)
+  let self_ = match decompose_prod_n 2 self with
+  | ([_; _], c) -> c
+  | exception _ -> assert false
+  in
+  let last = last_condition fctx + List.length args in
+  let (ext, _) = extend fctx in
+(*   let r_ = Vars.subst1 (*(it_mkLambda_or_LetIn (mkRel 3) ext)*) mkProp r_ in *)
+  let r_ = mkApp (r_, [| mkRel (last + 1); refl fctx.category (mkRel (last + 1)) |]) in
+  let self_ = Vars.substl [refl fctx.category (mkRel last); (mkRel last)] self_ in
+  let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in
+  msg_info (Termops.print_constr r_);
+  (sigma, r_)
 
 let apply_global env sigma gr u fctx =
   (** FIXME *)
@@ -229,24 +246,8 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let ci_ = Inductiveops.make_case_info env ind_ ci.ci_pp_info.style in
   let (sigma, c_) = otranslate env fctx sigma c in
 
-  (** The return clause must be mangled for the last variable *)
   let (sigma, r_) = otranslate env fctx sigma r in
-  msg_info (Termops.print_constr r);
-  msg_info (Termops.print_constr r_);
-  let (args, r_) = decompose_lam_assum r_ in
-  let ((na, _, self), args) = match args with h :: t -> (h, t) | _ -> assert false in
-  (** Remove the forall boxing *)
-  let self_ = match decompose_prod_n 2 self with
-  | ([_; _], c) -> c
-  | exception _ -> assert false
-  in
-  let last = last_condition fctx + List.length args in
-  let (ext, _) = extend fctx in
-(*   let r_ = Vars.subst1 (*(it_mkLambda_or_LetIn (mkRel 3) ext)*) mkProp r_ in *)
-  let r_ = mkApp (r_, [| mkRel (last + 1); refl fctx.category (mkRel (last + 1)) |]) in
-  let self_ = Vars.substl [refl fctx.category (mkRel last); (mkRel last)] self_ in
-  let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in
-  msg_info (Termops.print_constr r_);
+  let (sigma, r_) = fix_return_clause env fctx sigma r_ in
 
   let fold sigma u = otranslate env fctx sigma u in
   let (sigma, p_) = CList.fold_map fold sigma (Array.to_list p) in
