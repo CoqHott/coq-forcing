@@ -26,17 +26,14 @@ Definition eq_rec_ p
       (e : eqᶠ p A x y) : P p # p # :=
   match e with eq_reflᶠ _ _ _ => Hrefl p # end. 
 
-Forcing Definition eq_rec_nd : forall A (x:A) (P : Type), P ->
-                                       forall y, x = y -> P using Obj Hom.
-Proof.
-  simpl. intros p A x P Hrefl y e.
-  exact (eq_rec_ p A P x Hrefl y (e p #)).
-Defined.
+Definition eq_rec_nd A (x : A) (P : Type) (p : P) y (e : x = y) : P := match e with eq_refl _ => p end.
+
+Forcing Translate eq_rec_nd using Obj Hom.
 
 Definition eq_mem : forall A x R, forall y, x = y ->
                                   (forall y, x = y -> R) -> R :=
   fun A x (R : Type) =>
-    eq_rec_nd A x ((forall y, x = y -> R) -> R) (fun f => f x (eq_refl x)).      
+    eq_rec_nd A x ((forall y, x = y -> R) -> R) (fun f => f x (eq_refl x)).
 
 Forcing Translate eq_mem using Obj Hom.
 
