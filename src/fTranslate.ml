@@ -231,6 +231,8 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 
   (** The return clause must be mangled for the last variable *)
   let (sigma, r_) = otranslate env fctx sigma r in
+  msg_info (Termops.print_constr r);
+  msg_info (Termops.print_constr r_);
   let (args, r_) = decompose_lam_assum r_ in
   let ((na, _, self), args) = match args with h :: t -> (h, t) | _ -> assert false in
   (** Remove the forall boxing *)
@@ -238,12 +240,12 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   | ([_; _], c) -> c
   | exception _ -> assert false
   in
-  let last = mkRel (last_condition fctx + List.length args) in
+  let last = last_condition fctx + List.length args in
   let (ext, _) = extend fctx in
-  let r_ = Vars.subst1 (it_mkLambda_or_LetIn (mkRel 1) ext) r_ in
-  let c = Vars.substl [refl fctx.category last; last] c in
+(*   let r_ = Vars.subst1 (*(it_mkLambda_or_LetIn (mkRel 3) ext)*) mkProp r_ in *)
+  let r_ = mkApp (r_, [| mkRel (last + 1); refl fctx.category (mkRel (last + 1)) |]) in
+  let self_ = Vars.substl [refl fctx.category (mkRel last); (mkRel last)] self_ in
   let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in
-  msg_info (Termops.print_constr r);
   msg_info (Termops.print_constr r_);
 
   let fold sigma u = otranslate env fctx sigma u in

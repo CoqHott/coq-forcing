@@ -13,7 +13,7 @@ Forcing Translate bool using Obj Hom.
 
 Definition bool_rec : forall P, P -> P -> bool -> P := fun P Ptt Pff b => match b with true => Ptt | false => Pff end.
 
-Fail Forcing Translate bool_rec using Obj Hom.
+Forcing Translate bool_rec using Obj Hom.
 
 Definition bool_mem : forall R, bool -> (bool -> R) -> R :=
   fun R b => bool_rec ((bool -> R) -> R) (fun k => k true) (fun k => k false) b.
