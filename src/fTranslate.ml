@@ -47,7 +47,7 @@ let forcing_module =
   let dp = List.map Id.of_string ["Forcing"; "Forcing"] in
   ModPath.MPfile (DirPath.make dp)
 
-let cType = (MutInd.make2 forcing_module (Label.make "CType"), 0)
+let cType = (MutInd.make2 forcing_module (Label.make "Typeᶠ"), 0)
 let ctype = (cType, 1)
 let ptype = Projection.make (Constant.make2 forcing_module (Label.make "type")) false
 
