@@ -61,6 +61,13 @@ let mkOptApp (t, args) =
   with _ ->
     mkApp (t, args)
 
+let mkOptProj c = match kind_of_term c with
+| App (i, args) ->
+  if Array.length args = 5 && Term.isConstruct i then args.(3)
+  else mkProj (ptype, c)
+| _ ->
+  mkProj (ptype, c)
+
 (** Forcing translation *)
 
 type forcing_condition =
@@ -135,21 +142,18 @@ let add_variable fctx =
 
 (** Given an inhabitant of CType build a Type *)
 let projfType fctx c =
-  let c = match kind_of_term c with
-  | App (i, args) ->
-    if Array.length args = 4 && Term.isConstruct i then args.(3)
-    else mkProj (ptype, c)
-  | _ ->
-    mkProj (ptype, c)
-  in
+  let c = mkOptProj c in
   let last = mkRel (last_condition fctx) in
   mkOptApp (c, [| last; refl fctx.category last |])
 
 (** Inverse *)
-let mkfType env fctx sigma lam =
+let mkfType env fctx sigma lam mon =
   let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
-  let lam = mkApp (mkConstructU pc, [| fctx.category.cat_obj; hom_type fctx.category; mkRel (last_condition fctx); lam |]) in
-  (sigma, lam)
+  let (ext0, fctx0) = extend fctx in
+  let self = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 lam, [| mkRel 2; mkRel 1 |])) ext0 in
+  let mon = mkLambda (Anonymous, self, mon) in
+  let tpe = mkApp (mkConstructU pc, [| fctx.category.cat_obj; hom_type fctx.category; mkRel (last_condition fctx); lam; mon |]) in
+  (sigma, tpe)
 
 (** Handling of globals *) 
 
@@ -208,7 +212,7 @@ let apply_global env sigma gr u fctx =
     in
     let params = CList.init nparams mk_var in
     let app = applist (c, mkRel (last_condition fctx0) :: params) in
-    let (sigma, tpe) = mkfType env fctx sigma (it_mkLambda_or_LetIn app ext) in
+    let (sigma, tpe) = mkfType env fctx sigma (it_mkLambda_or_LetIn app ext) mkProp in
     let map_p i c = Vars.substnl_decl [mkRel last] (nparams - i - 1) c in
     let paramtyp = List.mapi map_p paramtyp in
     let ans = it_mkLambda_or_LetIn tpe paramtyp in
@@ -226,7 +230,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let (sigma, pi) = Evd.fresh_inductive_instance env sigma cType in
   let tpe = mkApp (mkIndU pi, [| fctx.category.cat_obj; hom_type fctx.category; mkRel 2 |]) in
   let lam = it_mkLambda_or_LetIn tpe ext0 in
-  mkfType env fctx sigma lam
+  mkfType env fctx sigma lam mkProp
 | Cast (c, k, t) ->
   let (sigma, c_) = otranslate env fctx sigma c in
   let (sigma, t_) = otranslate_type env fctx sigma t in
@@ -242,7 +246,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   (** Result *)
   let ans = mkProd (na, t_, u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
-  let (sigma, tpe) = mkfType env fctx sigma lam in
+  let (sigma, tpe) = mkfType env fctx sigma lam mkProp in
   (sigma, tpe)
 | Lambda (na, t, u) ->
   (** Translation of t *)
