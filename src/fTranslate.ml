@@ -49,7 +49,9 @@ let forcing_module =
 
 let cType = (MutInd.make2 forcing_module (Label.make "Typeᶠ"), 0)
 let ctype = (cType, 1)
+let cmono = (cType, 2)
 let ptype = Projection.make (Constant.make2 forcing_module (Label.make "type")) false
+let pmono = Projection.make (Constant.make2 forcing_module (Label.make "mono")) false
 
 (** Optimization of cuts *)
 
@@ -67,6 +69,13 @@ let mkOptProj c = match kind_of_term c with
   else mkProj (ptype, c)
 | _ ->
   mkProj (ptype, c)
+
+let mkOptMono c = match kind_of_term c with
+| App (i, args) ->
+  if Array.length args = 5 && Term.isConstruct i then args.(4)
+  else mkProj (pmono, c)
+| _ ->
+  mkProj (pmono, c)
 
 (** Forcing translation *)
 
@@ -182,6 +191,28 @@ let mkfType lam mon env fctx sigma =
   let tpe = mkApp (mkConstructU pc, [| fctx.category.cat_obj; hom_type fctx.category; mkRel (last_condition fctx); lam; mon |]) in
   (sigma, tpe)
 
+let box t =
+  in_extend begin fun ext ->
+    t >>= fun t_ ->
+    return (it_mkLambda_or_LetIn t_ ext)
+  end
+
+let box_type t =
+  in_extend begin fun ext ->
+    t >>= fun t_ ->
+    projfType t_ >>= fun t_ ->
+    return (it_mkProd_or_LetIn t_ ext)
+  end
+
+let rel_type t =
+  t >>= fun t_ -> return (mkOptMono t_)
+
+let translate_var fctx n =
+  let p = mkRel (last_condition fctx) in
+  let f = morphism_var n fctx in
+  let m = get_var_shift n fctx in
+  mkApp (mkRel m, [| p; f |])
+
 (** Parametricity conditions. Rel1 is bound to a boxed term of the right type *)
 
 let type_mon env fctx sigma =
@@ -200,16 +231,19 @@ let type_mon env fctx sigma =
   let mon = it_mkProd_or_LetIn mon (ext0 @ ext) in
   (sigma, mon)
 
-let prod_mon na t u = (); fun env fctx sigma ->
-  (sigma, mkProp)
+let prod_mon na t u =
+  box_type t >>= fun t_ ->
+(*   rel_type t >>= fun rel_ -> *)
+  in_var (box (fun env fctx sigma -> (sigma, translate_var fctx 1))) >>= fun x ->
+  (** There is hidden variable up there *)
+  let t_ = Vars.lift 1 t_ in
+(*   let rel_ = Vars.lift 2 rel_ in *)
+(*   let relarg = mkOptApp (rel_, [| Vars.liftn 1 2 x |]) in *)
+  return (mkProd (na, t_, (*mkArrow relarg*) mkProp))
+
+let dummy_mon = mkProp
 
 (** Handling of globals *) 
-
-let translate_var fctx n =
-  let p = mkRel (last_condition fctx) in
-  let f = morphism_var n fctx in
-  let m = get_var_shift n fctx in
-  mkApp (mkRel m, [| p; f |])
 
 let rec untranslate_rel n c = match Constr.kind c with
 | App (t, args) when isRel t && Array.length args >= 2 ->
@@ -260,7 +294,7 @@ let apply_global env sigma gr u fctx =
     in
     let params = CList.init nparams mk_var in
     let app = applist (c, mkRel (last_condition fctx0) :: params) in
-    let (sigma, tpe) = mkfType (it_mkLambda_or_LetIn app ext) mkProp env fctx sigma in
+    let (sigma, tpe) = mkfType (it_mkLambda_or_LetIn app ext) dummy_mon env fctx sigma in
     let map_p i c = Vars.substnl_decl [mkRel last] (nparams - i - 1) c in
     let paramtyp = List.mapi map_p paramtyp in
     let ans = it_mkLambda_or_LetIn tpe paramtyp in
@@ -301,7 +335,7 @@ let rec otranslate c = match kind_of_term c with
     let ans = mkProd (na, t_, u_) in
     return (it_mkLambda_or_LetIn ans ext0)
   end >>= fun lam ->
-  prod_mon na t u >>= fun mon ->
+  prod_mon na (otranslate t) (otranslate u) >>= fun mon ->
   mkfType lam mon
 
 | Lambda (na, t, u) ->

@@ -84,7 +84,7 @@ let force_translate_constant cat cst ids =
   (** Define the term by tactic *)
   let body = Option.get (Global.body_of_constant cst) in
   let (sigma, body) = FTranslate.translate !translator cat env sigma body in
-(*   msg_info (Termops.print_constr body); *)
+  msg_info (Termops.print_constr body);
   let evdref = ref sigma in
   let () = Typing.check env evdref body typ in
   let sigma = !evdref in
