@@ -25,6 +25,10 @@ let hom cat a b =
   let arr = mkArrow lft rgt in
   mkProd (obj_name, cat.cat_obj, arr)
 
+let hom_type cat =
+  mkLambda (obj_name, cat.cat_obj,
+    mkLambda (obj_name, cat.cat_obj, hom cat (mkRel 2) (mkRel 1)))
+
 let refl cat a =
   let hom = mkApp (cat.cat_hom, [| Vars.lift 1 a; mkRel 1 |]) in
   let lam = mkLambda (knt_name, hom, mkRel 1) in
@@ -36,6 +40,16 @@ let trns cat a b c f g =
   let app' = mkApp (Vars.lift 2 f, [| mkRel 2; app |]) in
   let lam = mkLambda (knt_name, hom, app') in
   mkLambda (obj_name, cat.cat_obj, lam)
+
+(** Translation of types *)
+
+let forcing_module =
+  let dp = List.map Id.of_string ["Forcing"; "Forcing"] in
+  ModPath.MPfile (DirPath.make dp)
+
+let cType = (MutInd.make2 forcing_module (Label.make "CType"), 0)
+let ctype = (cType, 1)
+let ptype = Projection.make (Constant.make2 forcing_module (Label.make "type")) false
 
 (** Optimization of cuts *)
 
@@ -117,6 +131,26 @@ let extend fctx =
 let add_variable fctx =
   { fctx with context = Variable :: fctx.context }
 
+(** Macros *)
+
+(** Given an inhabitant of CType build a Type *)
+let projfType fctx c =
+  let c = match kind_of_term c with
+  | App (i, args) ->
+    if Array.length args = 4 && Term.isConstruct i then args.(3)
+    else mkProj (ptype, c)
+  | _ ->
+    mkProj (ptype, c)
+  in
+  let last = mkRel (last_condition fctx) in
+  mkOptApp (c, [| last; refl fctx.category last |])
+
+(** Inverse *)
+let mkfType env fctx sigma lam =
+  let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
+  let lam = mkApp (mkConstructU pc, [| fctx.category.cat_obj; hom_type fctx.category; mkRel (last_condition fctx); lam |]) in
+  (sigma, lam)
+
 (** Handling of globals *) 
 
 let translate_var fctx n =
@@ -160,25 +194,24 @@ let apply_global env sigma gr u fctx =
   let last = last_condition fctx in
   match gr with
   | IndRef _ ->
-    let cat = fctx.category in
     let (_, oib) = Inductive.lookup_mind_specif env (fst (destInd c)) in
     (** First parameter is the toplevel forcing condition *)
     let _, paramtyp = CList.sep_last oib.mind_arity_ctxt in
     let nparams = List.length paramtyp in
     let fctx = List.fold_left (fun accu _ -> add_variable accu) fctx paramtyp in
-    let (ext, fctx) = extend fctx in
+    let (ext, fctx0) = extend fctx in
     let mk_var n =
       let n = nparams - n in
-      let (ext0, fctx) = extend fctx in
+      let (ext0, fctx) = extend fctx0 in
       let ans = translate_var fctx n in
       it_mkLambda_or_LetIn ans ext0
     in
     let params = CList.init nparams mk_var in
-    let app = applist (c, mkRel (last_condition fctx) :: params) in
+    let app = applist (c, mkRel (last_condition fctx0) :: params) in
+    let (sigma, tpe) = mkfType env fctx sigma (it_mkLambda_or_LetIn app ext) in
     let map_p i c = Vars.substnl_decl [mkRel last] (nparams - i - 1) c in
     let paramtyp = List.mapi map_p paramtyp in
-    let ans = it_mkLambda_or_LetIn app (ext @ paramtyp) in
-(*     msg_info (Termops.print_constr ans); *)
+    let ans = it_mkLambda_or_LetIn tpe paramtyp in
     (sigma, ans)
   | _ -> (sigma, mkApp (c, [| mkRel last |]))
 
@@ -189,32 +222,28 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let ans = translate_var fctx n in
   (sigma, ans)
 | Sort s ->
-  let (ext0, fctx) = extend fctx in
-  let (ext, fctx) = extend fctx in
-  let (sigma, s') =
-    if Sorts.is_prop s then (sigma, Sorts.prop)
-    else Evd.new_sort_variable Evd.univ_flexible_alg sigma
-  in
-  let sigma = Evd.set_leq_sort env sigma s s' in
-  let tpe = it_mkProd_or_LetIn (mkSort s') ext in
+  let (ext0, _) = extend fctx in
+  let (sigma, pi) = Evd.fresh_inductive_instance env sigma cType in
+  let tpe = mkApp (mkIndU pi, [| fctx.category.cat_obj; hom_type fctx.category; mkRel 2 |]) in
   let lam = it_mkLambda_or_LetIn tpe ext0 in
-  (sigma, lam)
+  mkfType env fctx sigma lam
 | Cast (c, k, t) ->
   let (sigma, c_) = otranslate env fctx sigma c in
   let (sigma, t_) = otranslate_type env fctx sigma t in
   let ans = mkCast (c_, k, t_) in
   (sigma, ans)
 | Prod (na, t, u) ->
-  let (ext0, fctx) = extend fctx in
+  let (ext0, fctx0) = extend fctx in
   (** Translation of t *)
-  let (sigma, t_) = otranslate_boxed_type env fctx sigma t in
+  let (sigma, t_) = otranslate_boxed_type env fctx0 sigma t in
   (** Translation of u *)
-  let ufctx = add_variable fctx in
+  let ufctx = add_variable fctx0 in
   let (sigma, u_) = otranslate_type env ufctx sigma u in
   (** Result *)
   let ans = mkProd (na, t_, u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
-  (sigma, lam)
+  let (sigma, tpe) = mkfType env fctx sigma lam in
+  (sigma, tpe)
 | Lambda (na, t, u) ->
   (** Translation of t *)
   let (sigma, t_) = otranslate_boxed_type env fctx sigma t in
@@ -267,8 +296,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 
 and otranslate_type env fctx sigma t =
   let (sigma, t_) = otranslate env fctx sigma t in
-  let last = mkRel (last_condition fctx) in
-  let t_ = mkOptApp (t_, [| last; refl fctx.category last |]) in
+  let t_ = projfType fctx t_ in
   (sigma, t_)
 
 and otranslate_boxed env fctx sigma t =

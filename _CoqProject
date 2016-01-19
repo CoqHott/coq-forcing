@@ -10,11 +10,4 @@ src/forcing.mllib
 
 theories/Forcing.v
 
-theories/Sigma.v
-theories/Bool.v
-theories/Nat.v
-theories/Eq.v
-theories/List.v
-theories/NegPropExt.v
-
 test/Test.v
