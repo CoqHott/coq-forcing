@@ -155,6 +155,24 @@ let mkfType env fctx sigma lam mon =
   let tpe = mkApp (mkConstructU pc, [| fctx.category.cat_obj; hom_type fctx.category; mkRel (last_condition fctx); lam; mon |]) in
   (sigma, tpe)
 
+(** Parametricity conditions. Rel1 is bound to a boxed term of the right type *)
+
+let type_mon env fctx sigma =
+  let cat = fctx.category in
+  let dummy = mkProp in
+  let fctx = add_variable fctx in
+  let eq = Coqlib.gen_constant "" ["Init"; "Logic"] "eq" in
+  let (sigma, s) = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
+  let (ext, fctx) = extend fctx in
+  let (ext0, fctx) = extend fctx in
+  (** (A q f).type r g *)
+  let lhs = mkApp (mkOptProj (mkApp (mkRel 5, [| mkRel 4; mkRel 3 |])), [| mkRel 2; mkRel 1 |]) in
+  (** (A r (f o g)).type r id *)
+  let rhs = mkApp (mkOptProj (mkApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |])), [| mkRel 2; refl cat (mkRel 2) |]) in
+  let mon = mkApp (eq, [| mkSort s; lhs; rhs |]) in
+  let mon = it_mkProd_or_LetIn mon (ext0 @ ext) in
+  (sigma, mon)
+
 (** Handling of globals *) 
 
 let translate_var fctx n =
@@ -230,7 +248,8 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let (sigma, pi) = Evd.fresh_inductive_instance env sigma cType in
   let tpe = mkApp (mkIndU pi, [| fctx.category.cat_obj; hom_type fctx.category; mkRel 2 |]) in
   let lam = it_mkLambda_or_LetIn tpe ext0 in
-  mkfType env fctx sigma lam mkProp
+  let (sigma, mon) = type_mon env fctx sigma in
+  mkfType env fctx sigma lam mon
 | Cast (c, k, t) ->
   let (sigma, c_) = otranslate env fctx sigma c in
   let (sigma, t_) = otranslate_type env fctx sigma t in
