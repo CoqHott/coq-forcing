@@ -173,6 +173,9 @@ let type_mon env fctx sigma =
   let mon = it_mkProd_or_LetIn mon (ext0 @ ext) in
   (sigma, mon)
 
+let prod_mon env fctx sigma na t u =
+  (sigma, mkProp)
+
 (** Handling of globals *) 
 
 let translate_var fctx n =
@@ -261,11 +264,12 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let (sigma, t_) = otranslate_boxed_type env fctx0 sigma t in
   (** Translation of u *)
   let ufctx = add_variable fctx0 in
-  let (sigma, u_) = otranslate_type env ufctx sigma u in
+  let (sigma, u_) = otranslate env ufctx sigma u in
   (** Result *)
-  let ans = mkProd (na, t_, u_) in
+  let ans = mkProd (na, t_, projfType ufctx u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
-  let (sigma, tpe) = mkfType env fctx sigma lam mkProp in
+  let (sigma, mon) = prod_mon env fctx sigma na t u in
+  let (sigma, tpe) = mkfType env fctx sigma lam mon in
   (sigma, tpe)
 | Lambda (na, t, u) ->
   (** Translation of t *)
