@@ -43,47 +43,61 @@ end.
 
 Fail Forcing Translate bool_rect using Obj Hom.
 
+
 Forcing Definition bool_rect' : forall P,
     P true -> P false -> forall (b : bool), bool_mem _ b P
                                                      using Obj Hom.
 intros p P Htrue Hfalse b.
-compute.
-pose (P_type := fun p => forall p0 : Obj,
-      p ≤ p0 ->
-      (forall p : Obj, p0 ≤ p -> boolᶠ p) ->
-      forall p : Obj, p0 ≤ p -> Type).
-pose (Htrue_type := fun p (P:P_type p) => forall (p0 : Obj) (α : p ≤ p0),
-          P p0 (# ∘ (α ∘ #)) (fun (p : Obj) (_ : p0 ≤ p) => trueᶠ p) p0 #).
-pose (Hfalse_type := fun p (P:P_type p) => forall (p0 : Obj) (α : p ≤ p0),
-          P p0 (# ∘ (α ∘ #)) (fun (p : Obj) (_ : p0 ≤ p) => falseᶠ p) p0 #).
-pose (Goal_type := fun p (P:P_type p) (Htrue : Htrue_type p P) (Hfalse : Hfalse_type p P)
-                       (b: boolᶠ p)
-                   => match b with
-   | trueᶠ _ =>
-       fun
-         k : forall p0 : Obj,
-             p ≤ p0 ->
-             (forall p1 : Obj, p0 ≤ p1 -> boolᶠ p1) ->
-             forall p1 : Obj, p0 ≤ p1 -> Type =>
-       k p # (fun (p0 : Obj) (_ : p ≤ p0) => trueᶠ p0)
-   | falseᶠ _ =>
-       fun
-         k : forall p0 : Obj,
-             p ≤ p0 ->
-             (forall p1 : Obj, p0 ≤ p1 -> boolᶠ p1) ->
-             forall p1 : Obj, p0 ≤ p1 -> Type =>
-       k p # (fun (p0 : Obj) (_ : p ≤ p0) => falseᶠ p0)
-   end
-     (fun (p0 : Obj) (α : p ≤ p0) =>
-      P p0 (fun (R : Obj) (k : Hom p0 R) => α R k)) p 
-     #).
-change (Goal_type p P Htrue Hfalse (b p #)).
-set (b0 := b p #). 
-exact ( match b0 as b1 return Goal_type _ _ _ _ b1 with
+compute. generalize (b p #).
+exact (fun b => match b with
         | trueᶠ _ =>  Htrue p #
         | falseᶠ _ => Hfalse p #
-end). 
-Defined.
+                end).
+(* Universe issue *)
+Abort.
 
+Forcing Definition bool_rect' : forall P,
+    P true -> P false -> forall (b : bool), bool_mem _ b P
+                                                     using Obj Hom.
+exact (fun (p : Obj)
+   (P : forall p0 : Obj,
+        p ≤ p0 ->
+        (forall p1 : Obj, p0 ≤ p1 -> boolᶠ p1) ->
+        forall p1 : Obj, p0 ≤ p1 -> Type)
+   (Htrue : forall (p0 : Obj) (α : p ≤ p0),
+            P p0 (# ∘ (α ∘ #)) (fun (p1 : Obj) (_ : p0 ≤ p1) => trueᶠ p1)
+              p0 #)
+   (Hfalse : forall (p0 : Obj) (α : p ≤ p0),
+             P p0 (# ∘ (# ∘ (α ∘ #)))
+               (fun (p1 : Obj) (_ : p0 ≤ p1) => falseᶠ p1) p0 
+               #) (b : forall p0 : Obj, p ≤ p0 -> boolᶠ p0) =>
+ (fun b0 : boolᶠ p =>
+  match
+    b0 as b1
+    return
+      (match b1 with
+       | trueᶠ _ =>
+           fun
+             k : forall p0 : Obj,
+                 p ≤ p0 ->
+                 (forall p1 : Obj, p0 ≤ p1 -> boolᶠ p1) ->
+                 forall p1 : Obj, p0 ≤ p1 -> Type =>
+           k p # (fun (p0 : Obj) (_ : p ≤ p0) => trueᶠ p0)
+       | falseᶠ _ =>
+           fun
+             k : forall p0 : Obj,
+                 p ≤ p0 ->
+                 (forall p1 : Obj, p0 ≤ p1 -> boolᶠ p1) ->
+                 forall p1 : Obj, p0 ≤ p1 -> Type =>
+           k p # (fun (p0 : Obj) (_ : p ≤ p0) => falseᶠ p0)
+       end
+         (fun (p0 : Obj) (α : p ≤ p0) =>
+          P p0 (fun (R : Obj) (k : Hom p0 R) => α R k)) p 
+         #)
+  with
+  | trueᶠ _ => Htrue p #
+  | falseᶠ _ => Hfalse p #
+  end) (b p #)).
+Defined. 
 
 End Bool.
