@@ -1,5 +1,6 @@
 open Names
 open Term
+open Declarations
 open Environ
 open Globnames
 open Pp
@@ -138,10 +139,9 @@ let fix_return_clause env fctx sigma r_ =
   (** Remove the forall boxing *)
   let self_ = match decompose_prod_n 2 self with
   | ([_; _], c) -> c
-  | exception _ -> assert false
+  | _ -> assert false
   in
   let last = last_condition fctx + List.length args in
-  let (ext, _) = extend fctx in
   let r_ = untranslate_rel 1 r_ in
   let r_ = mkApp (r_, [| mkRel (last + 1); refl fctx.category (mkRel (last + 1)) |]) in
   let self_ = Vars.substl [refl fctx.category (mkRel last); (mkRel last)] self_ in
@@ -160,7 +160,6 @@ let apply_global env sigma gr u fctx =
   let last = last_condition fctx in
   match gr with
   | IndRef _ ->
-    let cat = fctx.category in
     let (_, oib) = Inductive.lookup_mind_specif env (fst (destInd c)) in
     (** First parameter is the toplevel forcing condition *)
     let _, paramtyp = CList.sep_last oib.mind_arity_ctxt in
