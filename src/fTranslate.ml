@@ -7,6 +7,13 @@ open Pp
 type translator = global_reference Refmap.t
 exception MissingGlobal of global_reference
 
+let rel_name = function
+| Anonymous -> Anonymous
+| Name id ->
+  let id = Id.to_string id in
+  let id_ = Id.of_string (id ^ "ᴿ") in
+  Name id_
+
 (** Yoneda embedding *)
 
 type category = {
@@ -105,7 +112,7 @@ let dummy = mkProp
 let last_condition fctx =
   let rec last fctx = match fctx with
   | [] -> 1
-  | Variable :: fctx -> 1 + last fctx
+  | Variable :: fctx -> 2 + last fctx
   | Lift :: fctx -> 2
   in
   last fctx.context
@@ -115,7 +122,7 @@ let gather_morphisms n fctx =
     if n = 0 then []
     else match fctx with
     | [] -> []
-    | Variable :: fctx -> gather (i + 1) (n - 1) fctx
+    | Variable :: fctx -> gather (i + 2) (n - 1) fctx
     | Lift :: fctx -> i :: gather (i + 2) n fctx
   in
   gather 1 n fctx.context
@@ -133,7 +140,7 @@ let get_var_shift n fctx =
     if n = 0 then 0
     else match fctx with
     | [] -> n
-    | Variable :: fctx -> 1 + get (n - 1) fctx
+    | Variable :: fctx -> 2 + get (n - 1) fctx
     | Lift :: fctx -> 2 + get n fctx
   in
   get n fctx.context
@@ -229,17 +236,19 @@ let type_mon env fctx sigma =
   let rhs = mkApp (mkOptProj (mkApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |])), [| mkRel 2; refl cat (mkRel 2) |]) in
   let mon = mkApp (eq, [| mkSort s; lhs; rhs |]) in
   let mon = it_mkProd_or_LetIn mon (ext0 @ ext) in
+  let mon = Vars.substnl [mkProp] 2 mon in
   (sigma, mon)
 
 let prod_mon na t u =
-  box_type t >>= fun t_ ->
+(*   box_type t >>= fun t_ -> *)
 (*   rel_type t >>= fun rel_ -> *)
-  in_var (box (fun env fctx sigma -> (sigma, translate_var fctx 1))) >>= fun x ->
+(*   in_var (box (fun env fctx sigma -> (sigma, translate_var fctx 1))) >>= fun x -> *)
   (** There is hidden variable up there *)
-  let t_ = Vars.lift 1 t_ in
+(*   let t_ = Vars.lift 1 t_ in *)
 (*   let rel_ = Vars.lift 2 rel_ in *)
 (*   let relarg = mkOptApp (rel_, [| Vars.liftn 1 2 x |]) in *)
-  return (mkProd (na, t_, (*mkArrow relarg*) mkProp))
+(*   return (mkProd (na, t_, (*mkArrow relarg*) mkProp)) *)
+  return mkProp
 
 let dummy_mon = mkProp
 
@@ -266,8 +275,6 @@ let fix_return_clause env fctx sigma r_ =
   let r_ = mkApp (r_, [| mkRel (last + 1); refl fctx.category (mkRel (last + 1)) |]) in
   let self_ = Vars.substl [refl fctx.category (mkRel last); (mkRel last)] self_ in
   let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in
-  msg_info (str "FINAL");
-  msg_info (Termops.print_constr r_);
   (sigma, r_)
 
 let apply_global env sigma gr u fctx =
@@ -332,7 +339,8 @@ let rec otranslate c = match kind_of_term c with
       otranslate u >>= fun u_ ->
       projfType u_
     end >>= fun u_ ->
-    let ans = mkProd (na, t_, u_) in
+    let unit = Coqlib.gen_constant "" ["Init"; "Datatypes"] "unit" in
+    let ans = mkProd (na, t_, mkProd (rel_name na, unit, u_)) in
     return (it_mkLambda_or_LetIn ans ext0)
   end >>= fun lam ->
   prod_mon na (otranslate t) (otranslate u) >>= fun mon ->
@@ -340,10 +348,11 @@ let rec otranslate c = match kind_of_term c with
 
 | Lambda (na, t, u) ->
   otranslate_boxed_type t >>= fun t_ ->
+  let unit = Coqlib.gen_constant "" ["Init"; "Datatypes"] "unit" in
   in_var begin
     otranslate u
   end >>= fun u_ ->
-  return (mkLambda (na, t_, u_))
+  return (mkLambda (na, t_, (mkLambda (rel_name na, unit, u_))))
 
 | LetIn (na, c, t, u) ->
   otranslate_boxed c >>= fun c_ ->
@@ -355,39 +364,20 @@ let rec otranslate c = match kind_of_term c with
 
 | App (t, args) ->
   otranslate t >>= fun t_ ->
-  let map u = otranslate_boxed u in
-  mmap map (Array.to_list args) >>= fun args_ ->
-  let app = applist (t_, args_) in
-  return app
-| Var id ->
-  fun env fctx sigma ->
-  apply_global env sigma (VarRef id) Univ.Instance.empty fctx
-| Const (p, u) ->
-  fun env fctx sigma ->
-  apply_global env sigma (ConstRef p) u fctx
-| Ind (i, u) ->
-  fun env fctx sigma ->
-  apply_global env sigma (IndRef i) u fctx
-| Construct (c, u) ->
-  fun env fctx sigma ->
-  apply_global env sigma (ConstructRef c) u fctx
-| Case (ci, r, c, p) ->
-  fun env fctx sigma ->
-  let ind_ = match Refmap.find (IndRef ci.ci_ind) fctx.translator with
-  | IndRef i -> i
-  | _ -> assert false
-  | exception Not_found -> raise (MissingGlobal (IndRef ci.ci_ind))
+  let map u =
+    otranslate_boxed u >>= fun u_ ->
+    rtranslate u >>= fun ur_ ->
+    return [u_; ur_]
   in
-  let ci_ = Inductiveops.make_case_info env ind_ ci.ci_pp_info.style in
-  let (sigma, c_) = otranslate c env fctx sigma in
+  mmap map (Array.to_list args) >>= fun args_ ->
+  let app = applist (t_, List.concat args_) in
+  return app
 
-  let (sigma, r_) = otranslate r env fctx sigma in
-  let (sigma, r_) = fix_return_clause env fctx sigma r_ in
-
-  let fold sigma u = otranslate u env fctx sigma in
-  let (sigma, p_) = CList.fold_map fold sigma (Array.to_list p) in
-  let p_ = Array.of_list p_ in
-  (sigma, mkCase (ci_, r_, c_, p_))
+| Var id -> assert false
+| Const (p, u) -> assert false
+| Ind (i, u) -> assert false
+| Construct (c, u) -> assert false
+| Case (ci, r, c, p) -> assert false
 | Fix f -> assert false
 | CoFix f -> assert false
 | Proj (p, c) -> assert false
@@ -409,6 +399,10 @@ and otranslate_boxed_type t env fctx sigma =
   let (sigma, t_) = otranslate_type t env ufctx sigma in
   let t_ = it_mkProd_or_LetIn t_ ext in
   (sigma, t_)
+
+and rtranslate t env fctx sigma =
+  let tt = Coqlib.gen_constant "" ["Init"; "Datatypes"] "tt" in
+  (sigma, tt)
 
 let empty translator cat lift env =
   let ctx = rel_context env in
