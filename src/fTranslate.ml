@@ -183,6 +183,11 @@ let get_inductive ind = (); fun env fctx sigma ->
 
 (** Macros *)
 
+let liftn_named_decl n k (na, b, t) = (na, Option.map (fun c -> Vars.liftn n k c) b, Vars.liftn n k t)
+let liftn_named_context n k ctx =
+  let len = List.length ctx in
+  List.mapi (fun i d -> liftn_named_decl n (k + len - i) d) ctx
+
 (** Given an inhabitant of CType build a Type *)
 let projfType c env fctx sigma =
   let c = mkOptProj c in
@@ -224,7 +229,6 @@ let translate_var fctx n =
 
 let type_mon env fctx sigma =
   let cat = fctx.category in
-  let dummy = mkProp in
   let fctx = add_variable fctx in
   let eq = Coqlib.gen_constant "" ["Init"; "Logic"] "eq" in
   let (sigma, s) = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
@@ -236,7 +240,7 @@ let type_mon env fctx sigma =
   let rhs = mkApp (mkOptProj (mkApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |])), [| mkRel 2; refl cat (mkRel 2) |]) in
   let mon = mkApp (eq, [| mkSort s; lhs; rhs |]) in
   let mon = it_mkProd_or_LetIn mon (ext0 @ ext) in
-  let mon = Vars.substnl [mkProp] 2 mon in
+  let mon = Vars.substnl [dummy] 2 mon in
   (sigma, mon)
 
 let prod_mon na t u =
@@ -308,6 +312,24 @@ let apply_global env sigma gr u fctx =
     (sigma, ans)
   | _ -> (sigma, mkApp (c, [| mkRel last |]))
 
+(** Given a type A, build x : [[A]], xᴿ : x ||- [[A]] *)
+let mkParamType t =
+  box_type t >>= fun t_ ->
+  in_extend begin fun ext ->
+    let ext = liftn_named_context 1 0 ext in
+    rel_type t >>= fun rel_ ->
+    let rel_ = Vars.liftn 1 3 rel_ in
+    in_extend begin fun ext ->
+      let ext = liftn_named_context 1 2 ext in
+      get_category >>= fun cat ->
+      let var = mkApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |]) in
+      return (it_mkLambda_or_LetIn var ext)
+    end >>= fun x ->
+    let rel_ = mkOptApp (rel_, [| x |]) in
+    return (it_mkProd_or_LetIn rel_ ext)
+  end >>= fun tr_ ->
+  return (t_, tr_)
+
 (** Forcing translation core *)
 
 let rec otranslate c = match kind_of_term c with
@@ -334,25 +356,23 @@ let rec otranslate c = match kind_of_term c with
 
 | Prod (na, t, u) ->
   in_extend begin fun ext0 ->
-    otranslate_boxed_type t >>= fun t_ ->
+    mkParamType (otranslate t) >>= fun (t_, tr_) ->
     in_var begin
       otranslate u >>= fun u_ ->
       projfType u_
     end >>= fun u_ ->
-    let unit = Coqlib.gen_constant "" ["Init"; "Datatypes"] "unit" in
-    let ans = mkProd (na, t_, mkProd (rel_name na, unit, u_)) in
+    let ans = mkProd (na, t_, mkProd (rel_name na, tr_, u_)) in
     return (it_mkLambda_or_LetIn ans ext0)
   end >>= fun lam ->
   prod_mon na (otranslate t) (otranslate u) >>= fun mon ->
   mkfType lam mon
 
 | Lambda (na, t, u) ->
-  otranslate_boxed_type t >>= fun t_ ->
-  let unit = Coqlib.gen_constant "" ["Init"; "Datatypes"] "unit" in
+  mkParamType (otranslate t) >>= fun (t_, tr_) ->
   in_var begin
     otranslate u
   end >>= fun u_ ->
-  return (mkLambda (na, t_, (mkLambda (rel_name na, unit, u_))))
+  return (mkLambda (na, t_, (mkLambda (rel_name na, tr_, u_))))
 
 | LetIn (na, c, t, u) ->
   otranslate_boxed c >>= fun c_ ->

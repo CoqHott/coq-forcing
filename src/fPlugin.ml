@@ -78,7 +78,7 @@ let force_translate_constant cat cst ids =
   let env = Global.env () in
   let sigma = Evd.from_env env in
   let (sigma, typ) = FTranslate.translate_type !translator cat env sigma typ in
-(*   msg_info (Termops.print_constr typ); *)
+  msg_info (Termops.print_constr typ);
   let sigma, _ = Typing.type_of env sigma typ in
   let _uctx = Evd.evar_universe_context sigma in
   (** Define the term by tactic *)
