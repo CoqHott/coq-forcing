@@ -150,6 +150,16 @@ let fix_return_clause env fctx sigma r_ =
   msg_info (Termops.print_constr r_);
   (sigma, r_)
 
+let get_inductive fctx ind =
+  let gr = IndRef ind in
+  let gr_ =
+    try Refmap.find gr fctx.translator
+    with Not_found -> raise (MissingGlobal gr)
+  in
+  match gr_ with
+  | IndRef ind_ -> ind_
+  | _ -> assert false
+
 let apply_global env sigma gr u fctx =
   (** FIXME *)
   let p' =
@@ -159,26 +169,7 @@ let apply_global env sigma gr u fctx =
   let (sigma, c) = Evd.fresh_global env sigma p' in
   let last = last_condition fctx in
   match gr with
-  | IndRef _ ->
-    let (_, oib) = Inductive.lookup_mind_specif env (fst (destInd c)) in
-    (** First parameter is the toplevel forcing condition *)
-    let _, paramtyp = CList.sep_last oib.mind_arity_ctxt in
-    let nparams = List.length paramtyp in
-    let fctx = List.fold_left (fun accu _ -> add_variable accu) fctx paramtyp in
-    let (ext, fctx) = extend fctx in
-    let mk_var n =
-      let n = nparams - n in
-      let (ext0, fctx) = extend fctx in
-      let ans = translate_var fctx n in
-      it_mkLambda_or_LetIn ans ext0
-    in
-    let params = CList.init nparams mk_var in
-    let app = applist (c, mkRel (last_condition fctx) :: params) in
-    let map_p i c = Vars.substnl_decl [mkRel last] (nparams - i - 1) c in
-    let paramtyp = List.mapi map_p paramtyp in
-    let ans = it_mkLambda_or_LetIn app (ext @ paramtyp) in
-(*     msg_info (Termops.print_constr ans); *)
-    (sigma, ans)
+  | IndRef _ -> assert false
   | _ -> (sigma, mkApp (c, [| mkRel last |]))
 
 (** Forcing translation core *)
@@ -228,26 +219,25 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let ufctx = add_variable fctx in
   let (sigma, u_) = otranslate env ufctx sigma u in
   (sigma, mkLetIn (na, c_, t_, u_))
+| App (t, args) when isInd t ->
+  let (ind, u) = destInd t in
+  otranslate_ind env fctx sigma ind u args
 | App (t, args) ->
   let (sigma, t_) = otranslate env fctx sigma t in
   let fold sigma u = otranslate_boxed env fctx sigma u in
-  let (sigma, args_) = CList.fold_map fold sigma (Array.to_list args) in
-  let app = applist (t_, args_) in
+  let (sigma, args_) = CArray.fold_map fold sigma args in
+  let app = mkApp (t_, args_) in
   (sigma, app)
 | Var id ->
   apply_global env sigma (VarRef id) Univ.Instance.empty fctx
 | Const (p, u) ->
   apply_global env sigma (ConstRef p) u fctx
-| Ind (i, u) ->
-  apply_global env sigma (IndRef i) u fctx
+| Ind (ind, u) ->
+  otranslate_ind env fctx sigma ind u [||]
 | Construct (c, u) ->
   apply_global env sigma (ConstructRef c) u fctx
 | Case (ci, r, c, p) ->
-  let ind_ = match Refmap.find (IndRef ci.ci_ind) fctx.translator with
-  | IndRef i -> i
-  | _ -> assert false
-  | exception Not_found -> raise (MissingGlobal (IndRef ci.ci_ind))
-  in
+  let ind_ = get_inductive fctx ci.ci_ind in
   let ci_ = Inductiveops.make_case_info env ind_ ci.ci_pp_info.style in
   let (sigma, c_) = otranslate env fctx sigma c in
 
@@ -255,14 +245,38 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   let (sigma, r_) = fix_return_clause env fctx sigma r_ in
 
   let fold sigma u = otranslate env fctx sigma u in
-  let (sigma, p_) = CList.fold_map fold sigma (Array.to_list p) in
-  let p_ = Array.of_list p_ in
+  let (sigma, p_) = CArray.fold_map fold sigma p in
   (sigma, mkCase (ci_, r_, c_, p_))
 | Fix f -> assert false
 | CoFix f -> assert false
 | Proj (p, c) -> assert false
 | Meta _ -> assert false
 | Evar _ -> assert false
+
+and otranslate_ind env fctx sigma ind u args =
+  let ind_ = get_inductive fctx ind in
+  let (_, oib) = Inductive.lookup_mind_specif env ind_ in
+  let fold sigma u = otranslate_boxed env fctx sigma u in
+  let (sigma, args_) = CArray.fold_map fold sigma args in
+  (** First parameter is the toplevel forcing condition *)
+  let _, paramtyp = CList.sep_last oib.mind_arity_ctxt in
+  let nparams = List.length paramtyp in
+  let last = last_condition fctx in
+  let fctx = List.fold_left (fun accu _ -> add_variable accu) fctx paramtyp in
+  let (ext, fctx) = extend fctx in
+  let mk_var n =
+    let n = nparams - n in
+    let (ext0, fctx) = extend fctx in
+    let ans = translate_var fctx n in
+    it_mkLambda_or_LetIn ans ext0
+  in
+  let (sigma, pi) = Evd.fresh_inductive_instance env sigma ind_ in
+  let params = CList.init nparams mk_var in
+  let app = applist (mkIndU pi, mkRel (last_condition fctx) :: params) in
+  let map_p i c = Vars.substnl_decl [mkRel last] (nparams - i - 1) c in
+  let paramtyp = List.mapi map_p paramtyp in
+  let ans = it_mkLambda_or_LetIn app (ext @ paramtyp) in
+  (sigma, mkApp (ans, args_))
 
 and otranslate_type env fctx sigma t =
   let (sigma, t_) = otranslate env fctx sigma t in
