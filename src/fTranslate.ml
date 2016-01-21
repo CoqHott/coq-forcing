@@ -276,7 +276,7 @@ and otranslate_ind env fctx sigma ind u args =
   let map_p i c = Vars.substnl_decl [mkRel last] (nparams - i - 1) c in
   let paramtyp = List.mapi map_p paramtyp in
   let ans = it_mkLambda_or_LetIn app (ext @ paramtyp) in
-  (sigma, mkApp (ans, args_))
+  (sigma, mkOptApp (ans, args_))
 
 and otranslate_type env fctx sigma t =
   let (sigma, t_) = otranslate env fctx sigma t in
