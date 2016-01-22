@@ -256,62 +256,6 @@ let prod_mon na t u =
 
 let dummy_mon = mkProp
 
-(** Handling of globals *) 
-
-let rec untranslate_rel n c = match Constr.kind c with
-| App (t, args) when isRel t && Array.length args >= 2 ->
-  c
-| _ -> Constr.map_with_binders succ untranslate_rel n c
-
-let fix_return_clause env fctx sigma r_ =
-  (** The return clause must be mangled for the last variable *)
-(*   msg_info (Termops.print_constr r_); *)
-  let (args, r_) = decompose_lam_assum r_ in
-  let ((na, _, self), args) = match args with h :: t -> (h, t) | _ -> assert false in
-  (** Remove the forall boxing *)
-  let self_ = match decompose_prod_n 2 self with
-  | ([_; _], c) -> c
-  | exception _ -> assert false
-  in
-  let last = last_condition fctx + List.length args in
-  let (ext, _) = extend fctx in
-  let r_ = untranslate_rel 1 r_ in
-  let r_ = mkApp (r_, [| mkRel (last + 1); refl fctx.category (mkRel (last + 1)) |]) in
-  let self_ = Vars.substl [refl fctx.category (mkRel last); (mkRel last)] self_ in
-  let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in
-  (sigma, r_)
-
-let apply_global env sigma gr u fctx =
-  (** FIXME *)
-  let p' =
-    try Refmap.find gr fctx.translator
-    with Not_found -> raise (MissingGlobal gr)
-  in
-  let (sigma, c) = Evd.fresh_global env sigma p' in
-  let last = last_condition fctx in
-  match gr with
-  | IndRef _ ->
-    let (_, oib) = Inductive.lookup_mind_specif env (fst (destInd c)) in
-    (** First parameter is the toplevel forcing condition *)
-    let _, paramtyp = CList.sep_last oib.mind_arity_ctxt in
-    let nparams = List.length paramtyp in
-    let fctx = List.fold_left (fun accu _ -> add_variable accu) fctx paramtyp in
-    let (ext, fctx0) = extend fctx in
-    let mk_var n =
-      let n = nparams - n in
-      let (ext0, fctx) = extend fctx0 in
-      let ans = translate_var fctx n in
-      it_mkLambda_or_LetIn ans ext0
-    in
-    let params = CList.init nparams mk_var in
-    let app = applist (c, mkRel (last_condition fctx0) :: params) in
-    let (sigma, tpe) = mkfType (it_mkLambda_or_LetIn app ext) dummy_mon env fctx sigma in
-    let map_p i c = Vars.substnl_decl [mkRel last] (nparams - i - 1) c in
-    let paramtyp = List.mapi map_p paramtyp in
-    let ans = it_mkLambda_or_LetIn tpe paramtyp in
-    (sigma, ans)
-  | _ -> (sigma, mkApp (c, [| mkRel last |]))
-
 (** Given a type A, build x : [[A]], xᴿ : x ||- [[A]] *)
 let mkParamType t =
   box_type t >>= fun t_ ->
@@ -329,6 +273,13 @@ let mkParamType t =
     return (it_mkProd_or_LetIn rel_ ext)
   end >>= fun tr_ ->
   return (t_, tr_)
+
+let in_var na t f =
+  mkParamType t >>= fun (t_, tr_) env fctx sigma ->
+  let fctx = add_variable fctx in
+  let ctx = [(rel_name na, None, tr_); (na, None, t_)] in
+  let env = Environ.push_rel_context ctx env in
+  f t_ tr_ env fctx sigma
 
 (** Forcing translation core *)
 
@@ -356,31 +307,28 @@ let rec otranslate c = match kind_of_term c with
 
 | Prod (na, t, u) ->
   in_extend begin fun ext0 ->
-    mkParamType (otranslate t) >>= fun (t_, tr_) ->
-    in_var begin
+    in_var na (otranslate t) begin fun t_ tr_ ->
       otranslate u >>= fun u_ ->
-      projfType u_
-    end >>= fun u_ ->
-    let ans = mkProd (na, t_, mkProd (rel_name na, tr_, u_)) in
+      projfType u_ >>= fun u_ ->
+      return (mkProd (na, t_, mkProd (rel_name na, tr_, u_)))
+    end >>= fun ans ->
     return (it_mkLambda_or_LetIn ans ext0)
   end >>= fun lam ->
   prod_mon na (otranslate t) (otranslate u) >>= fun mon ->
   mkfType lam mon
 
 | Lambda (na, t, u) ->
-  mkParamType (otranslate t) >>= fun (t_, tr_) ->
-  in_var begin
-    otranslate u
-  end >>= fun u_ ->
-  return (mkLambda (na, t_, (mkLambda (rel_name na, tr_, u_))))
+  in_var na (otranslate t) begin fun t_ tr_ ->
+    otranslate u >>= fun u_ ->
+    return (mkLambda (na, t_, (mkLambda (rel_name na, tr_, u_))))
+  end
 
 | LetIn (na, c, t, u) ->
   otranslate_boxed c >>= fun c_ ->
-  otranslate_boxed_type t >>= fun t_ ->
-  in_var begin
-    otranslate u
-  end >>= fun u_ ->
-  return (mkLetIn (na, c_, t_, u_))
+  in_var na (otranslate t) begin fun t_ tr_ ->
+    otranslate u >>= fun u_ ->
+    return (mkLetIn (na, c_, t_, u_))
+  end
 
 | App (t, args) ->
   otranslate t >>= fun t_ ->
