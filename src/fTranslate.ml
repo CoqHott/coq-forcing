@@ -225,6 +225,11 @@ let translate_var fctx n =
   let m = get_var_shift n fctx in
   mkApp (mkRel m, [| p; f |])
 
+let mkHole = fun env fctx sigma ->
+  let (sigma, (typ, _)) = Evarutil.new_type_evar env sigma Evd.univ_flexible_alg in
+  let (sigma, c) = Evarutil.new_evar env sigma typ in
+  (sigma, c)
+
 (** Parametricity conditions. Rel1 is bound to a boxed term of the right type *)
 
 let type_mon env fctx sigma =
@@ -391,12 +396,14 @@ let empty translator cat lift env =
 
 let translate ?(toplevel = true) ?lift translator cat env sigma c =
   let empty = empty translator cat lift env in
+  let env = Environ.push_rel (obj_name, None, cat.cat_obj) env in
   let (sigma, c) = otranslate c env empty sigma in
   let ans = if toplevel then mkLambda (pos_name, cat.cat_obj, c) else c in
   (sigma, ans)
 
 let translate_type ?(toplevel = true) ?lift translator cat env sigma c =
   let empty = empty translator cat lift env in
+  let env = Environ.push_rel (obj_name, None, cat.cat_obj) env in
   let (sigma, c) = otranslate_type c env empty sigma in
   let ans = if toplevel then mkProd (pos_name, cat.cat_obj, c) else c in
   (sigma, ans)
