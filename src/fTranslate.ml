@@ -131,25 +131,6 @@ let rec untranslate_rel n c = match Constr.kind c with
   c
 | _ -> Constr.map_with_binders succ untranslate_rel n c
 
-let fix_return_clause env fctx sigma r_ =
-  (** The return clause must be mangled for the last variable *)
-(*   msg_info (Termops.print_constr r_); *)
-  let (args, r_) = decompose_lam_assum r_ in
-  let ((na, _, self), args) = match args with h :: t -> (h, t) | _ -> assert false in
-  (** Remove the forall boxing *)
-  let self_ = match decompose_prod_n 2 self with
-  | ([_; _], c) -> c
-  | _ -> assert false
-  in
-  let last = last_condition fctx + List.length args in
-  let r_ = untranslate_rel 1 r_ in
-  let r_ = mkApp (r_, [| mkRel (last + 1); refl fctx.category (mkRel (last + 1)) |]) in
-  let self_ = Vars.substl [refl fctx.category (mkRel last); (mkRel last)] self_ in
-  let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in
-  msg_info (str "FINAL");
-  msg_info (Termops.print_constr r_);
-  (sigma, r_)
-
 let get_inductive fctx ind =
   let gr = IndRef ind in
   let gr_ =
@@ -237,16 +218,37 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 | Construct (c, u) ->
   apply_global env sigma (ConstructRef c) u fctx
 | Case (ci, r, c, p) ->
-  let ind_ = get_inductive fctx ci.ci_ind in
-  let ci_ = Inductiveops.make_case_info env ind_ ci.ci_pp_info.style in
-  let (sigma, c_) = otranslate env fctx sigma c in
-
-  let (sigma, r_) = otranslate env fctx sigma r in
-  let (sigma, r_) = fix_return_clause env fctx sigma r_ in
-
-  let fold sigma u = otranslate env fctx sigma u in
-  let (sigma, p_) = CArray.fold_map fold sigma p in
-  (sigma, mkCase (ci_, r_, c_, p_))
+   let ind_ = get_inductive fctx ci.ci_ind in
+   let ci_ = Inductiveops.make_case_info env ind_ ci.ci_pp_info.style in
+   let (sigma, c_) = otranslate env fctx sigma c in
+   (* let (sigma, r_) = otranslate_type env fctx sigma r in *)
+   let fix_return_clause env fctx sigma r_ =
+    (** The return clause structure is fun indexes self => Q
+        All indices must be boxed, but self only needs to be translated *)
+     let (args, r_) = decompose_lam_assum r_ in
+     let ((na, _, self), args) = match args with h :: t -> (h, t) | _ -> assert false in
+     let fold (sigma, fctx) (na, o, u) = 
+      (** For every translated index, the corresponding variable is added
+          to the forcing context *)
+       let (sigma, u_) = otranslate_boxed_type env fctx sigma u in
+       let fctx = add_variable fctx in
+       (sigma, fctx), (na, o, u_)
+     in
+     let (sigma, fctx), args = CList.fold_map fold (sigma, fctx) args in
+     let last = last_condition fctx + List.length args in
+     let (sigma, self_) = otranslate_type env fctx sigma self in
+     let self_ = Vars.substl [refl fctx.category (mkRel last); (mkRel last)] self_ in
+     let fctx = add_variable fctx in
+     let (sigma, r_) = otranslate_type env fctx sigma r_ in
+    (* let r_ = mkApp (r_, [| mkRel (last + 1); refl fctx.category (mkRel (last + 1)) |]) in *)
+     let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in
+     msg_info (Termops.print_constr r_);
+     (sigma, r_)       
+   in
+   let (sigma, r_) = fix_return_clause env fctx sigma r in
+   let fold sigma u = otranslate env fctx sigma u in
+   let (sigma, p_) = CArray.fold_map fold sigma p in
+   (sigma, mkCase (ci_, r_, c_, p_))
 | Fix f -> assert false
 | CoFix f -> assert false
 | Proj (p, c) -> assert false
