@@ -7,3 +7,5 @@ Record Typeᶠ@{i j k l} {Obj : Type@{i}} {Hom : Obj -> Obj -> Type@{j}} (p : Ob
   type : forall p0 (α : Hom p p0), Type@{k};
   mono : (forall p0 (α : Hom p p0), type p0 α) -> Type@{l};
 }.
+
+Definition cast {A B} (e : A = B) : B -> A := match e with eq_refl => fun x => x end.

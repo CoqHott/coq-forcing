@@ -59,6 +59,7 @@ let ctype = (cType, 1)
 let cmono = (cType, 2)
 let ptype = Projection.make (Constant.make2 forcing_module (Label.make "type")) false
 let pmono = Projection.make (Constant.make2 forcing_module (Label.make "mono")) false
+let fcast = Constant.make3 forcing_module DirPath.empty (Label.make "cast")
 
 (** Optimization of cuts *)
 
@@ -178,6 +179,9 @@ let get_category = (); fun env fctx sigma -> (sigma, fctx.category)
 let get_inductive ind = (); fun env fctx sigma ->
   Evd.fresh_inductive_instance env sigma ind
 
+let fresh_constant c = (); fun env fctx sigma ->
+  Evd.fresh_constant_instance env sigma c
+
 (** Macros *)
 
 let liftn_named_decl n k (na, b, t) = (na, Option.map (fun c -> Vars.liftn n k c) b, Vars.liftn n k t)
@@ -228,7 +232,7 @@ let mkHole = fun env fctx sigma ->
   (sigma, c)
 
 (** Given a type A, build x : [[A]], xᴿ : x ||- [[A]] *)
-let mkParamType t =
+let mkParamType t t_p =
   box_type t >>= fun t_ ->
   in_extend begin fun ext ->
     let ext = liftn_named_context 1 0 ext in
@@ -238,6 +242,13 @@ let mkParamType t =
       let ext = liftn_named_context 1 2 ext in
       get_category >>= fun cat ->
       let var = mkApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |]) in
+      fresh_constant fcast >>= fun cast ->
+      mkHole >>= fun typ1 ->
+      mkHole >>= fun typ2 ->
+      t_p >>= fun rw ->
+      let rw = Vars.liftn 1 5 rw in
+      let rw = mkOptApp (rw, [| mkRel 2; mkRel 1 |]) in
+      let var = mkApp (mkConstU cast, [| typ1; typ2; rw; var |]) in
       return (it_mkLambda_or_LetIn var ext)
     end >>= fun x ->
     let rel_ = mkOptApp (rel_, [| x |]) in
@@ -245,8 +256,8 @@ let mkParamType t =
   end >>= fun tr_ ->
   return (t_, tr_)
 
-let in_var na t f =
-  mkParamType t >>= fun (t_, tr_) env fctx sigma ->
+let in_var na t t_p f =
+  mkParamType t t_p >>= fun (t_, tr_) env fctx sigma ->
   let fctx = add_variable fctx in
   let ctx = [(rel_name na, None, tr_); (na, None, t_)] in
   let env = Environ.push_rel_context ctx env in
@@ -262,16 +273,16 @@ let type_mon env fctx sigma =
   let (ext, fctx) = extend fctx in
   let (ext0, fctx) = extend fctx in
   (** (A q f).type r g *)
-  let lhs = mkApp (mkOptProj (mkApp (mkRel 5, [| mkRel 4; mkRel 3 |])), [| mkRel 2; mkRel 1 |]) in
+  let lhs = mkOptApp (mkOptProj (mkOptApp (mkRel 5, [| mkRel 4; mkRel 3 |])), [| mkRel 2; mkRel 1 |]) in
   (** (A r (f o g)).type r id *)
-  let rhs = mkApp (mkOptProj (mkApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |])), [| mkRel 2; refl cat (mkRel 2) |]) in
+  let rhs = mkOptApp (mkOptProj (mkOptApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |])), [| mkRel 2; refl cat (mkRel 2) |]) in
   let mon = mkApp (eq, [| mkSort s; lhs; rhs |]) in
   let mon = it_mkProd_or_LetIn mon (ext0 @ ext) in
   let mon = Vars.substnl [dummy] 2 mon in
   (sigma, mon)
 
-let prod_mon na t u =
-  in_var na t begin fun var ->
+let prod_mon na t t_p u =
+  in_var na t t_p begin fun var ->
     return (it_mkProd_or_LetIn mkProp var)
   end
 
@@ -303,25 +314,18 @@ let rec otranslate c = match kind_of_term c with
 
 | Prod (na, t, u) ->
   in_extend begin fun ext0 ->
-    in_var na (otranslate t) begin fun var ->
+    in_var na (otranslate t) (rtranslate t) begin fun var ->
       otranslate u >>= fun u_ ->
       projfType u_ >>= fun u_ ->
       return (it_mkProd_or_LetIn u_ var)
     end >>= fun ans ->
     return (it_mkLambda_or_LetIn ans ext0)
   end >>= fun lam ->
-  prod_mon na (otranslate t) (otranslate u) >>= fun mon ->
+  prod_mon na (otranslate t) (rtranslate t) (otranslate u) >>= fun mon ->
   mkfType lam mon
 
 | Lambda (na, t, u) ->
-  in_var na (otranslate t) begin fun var ->
-    otranslate u >>= fun u_ ->
-    return (it_mkLambda_or_LetIn u_ var)
-  end
-
-| LetIn (na, c, t, u) ->
-  otranslate_boxed c >>= fun c_ ->
-  in_var na (otranslate t) begin fun var ->
+  in_var na (otranslate t) (rtranslate t) begin fun var ->
     otranslate u >>= fun u_ ->
     return (it_mkLambda_or_LetIn u_ var)
   end
@@ -337,6 +341,7 @@ let rec otranslate c = match kind_of_term c with
   let app = applist (t_, List.concat args_) in
   return app
 
+| LetIn (na, c, t, u) -> assert false
 | Var id -> assert false
 | Const (p, u) -> assert false
 | Ind (i, u) -> assert false
@@ -364,9 +369,52 @@ and otranslate_boxed_type t env fctx sigma =
   let t_ = it_mkProd_or_LetIn t_ ext in
   (sigma, t_)
 
-and rtranslate t env fctx sigma =
-  let tt = Coqlib.gen_constant "" ["Init"; "Datatypes"] "tt" in
-  (sigma, tt)
+and rtranslate t = match kind_of_term t with
+| Rel n ->
+  fun env fctx sigma ->
+    let f = morphism_var n fctx in
+    let n = get_var_shift n fctx - 1 in
+    let last = last_condition fctx in
+    (sigma, mkApp (mkRel n, [| mkRel last; f; mkRel last; refl fctx.category (mkRel last) |]))
+
+| Sort s ->
+  in_extend begin fun ext ->
+    mkHole >>= fun a ->
+    mkHole >>= fun x ->
+    let refl = Coqlib.gen_constant "" ["Init"; "Logic"] "eq_refl" in
+    let refl = mkApp (refl, [| a; x |]) in
+    return (it_mkLambda_or_LetIn refl ext)
+  end
+
+| Cast (c, k, t) ->
+  mkHole
+
+| Prod (na, t, u) ->
+  in_extend begin fun ext ->
+    mkHole >>= fun a ->
+    mkHole >>= fun x ->
+    let refl = Coqlib.gen_constant "" ["Init"; "Logic"] "eq_refl" in
+    let refl = mkApp (refl, [| a; x |]) in
+    return (it_mkLambda_or_LetIn refl ext)
+  end
+
+| Lambda (na, t, u) ->
+  mkHole
+
+| App (t, args) ->
+  mkHole
+
+| LetIn (na, c, t, u) -> assert false
+| Var id -> assert false
+| Const (p, u) -> assert false
+| Ind (i, u) -> assert false
+| Construct (c, u) -> assert false
+| Case (ci, r, c, p) -> assert false
+| Fix f -> assert false
+| CoFix f -> assert false
+| Proj (p, c) -> assert false
+| Meta _ -> assert false
+| Evar _ -> assert false
 
 let empty translator cat lift env =
   let ctx = rel_context env in
