@@ -279,7 +279,12 @@ let in_var na t f =
   let fctx = add_variable fctx in
   let ctx = [(rel_name na, None, tr_); (na, None, t_)] in
   let env = Environ.push_rel_context ctx env in
-  f t_ tr_ env fctx sigma
+  f ctx env fctx sigma
+
+let in_extend f = fun env fctx sigma ->
+  let (ext, fctx) = extend fctx in
+  let env = Environ.push_rel_context ext env in
+  f ext env fctx sigma
 
 (** Forcing translation core *)
 
@@ -307,10 +312,10 @@ let rec otranslate c = match kind_of_term c with
 
 | Prod (na, t, u) ->
   in_extend begin fun ext0 ->
-    in_var na (otranslate t) begin fun t_ tr_ ->
+    in_var na (otranslate t) begin fun var ->
       otranslate u >>= fun u_ ->
       projfType u_ >>= fun u_ ->
-      return (mkProd (na, t_, mkProd (rel_name na, tr_, u_)))
+      return (it_mkProd_or_LetIn u_ var)
     end >>= fun ans ->
     return (it_mkLambda_or_LetIn ans ext0)
   end >>= fun lam ->
@@ -318,16 +323,16 @@ let rec otranslate c = match kind_of_term c with
   mkfType lam mon
 
 | Lambda (na, t, u) ->
-  in_var na (otranslate t) begin fun t_ tr_ ->
+  in_var na (otranslate t) begin fun var ->
     otranslate u >>= fun u_ ->
-    return (mkLambda (na, t_, (mkLambda (rel_name na, tr_, u_))))
+    return (it_mkLambda_or_LetIn u_ var)
   end
 
 | LetIn (na, c, t, u) ->
   otranslate_boxed c >>= fun c_ ->
-  in_var na (otranslate t) begin fun t_ tr_ ->
+  in_var na (otranslate t) begin fun var ->
     otranslate u >>= fun u_ ->
-    return (mkLetIn (na, c_, t_, u_))
+    return (it_mkLambda_or_LetIn u_ var)
   end
 
 | App (t, args) ->
