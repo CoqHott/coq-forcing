@@ -168,13 +168,10 @@ let rec mmap (f : 'a -> 'b t) (l : 'a list) : 'b list t = match l with
 | [] -> return []
 | x :: l -> f x >>= fun x -> mmap f l >>= fun l -> return (x :: l)
 
-let in_extend f = (); fun env fctx sigma ->
+let in_extend f = fun env fctx sigma ->
   let (ext, fctx) = extend fctx in
+  let env = Environ.push_rel_context ext env in
   f ext env fctx sigma
-
-let in_var f = (); fun env fctx sigma ->
-  let fctx = add_variable fctx in
-  f env fctx sigma
 
 let get_category = (); fun env fctx sigma -> (sigma, fctx.category)
 
@@ -230,37 +227,6 @@ let mkHole = fun env fctx sigma ->
   let (sigma, c) = Evarutil.new_evar env sigma typ in
   (sigma, c)
 
-(** Parametricity conditions. Rel1 is bound to a boxed term of the right type *)
-
-let type_mon env fctx sigma =
-  let cat = fctx.category in
-  let fctx = add_variable fctx in
-  let eq = Coqlib.gen_constant "" ["Init"; "Logic"] "eq" in
-  let (sigma, s) = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
-  let (ext, fctx) = extend fctx in
-  let (ext0, fctx) = extend fctx in
-  (** (A q f).type r g *)
-  let lhs = mkApp (mkOptProj (mkApp (mkRel 5, [| mkRel 4; mkRel 3 |])), [| mkRel 2; mkRel 1 |]) in
-  (** (A r (f o g)).type r id *)
-  let rhs = mkApp (mkOptProj (mkApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |])), [| mkRel 2; refl cat (mkRel 2) |]) in
-  let mon = mkApp (eq, [| mkSort s; lhs; rhs |]) in
-  let mon = it_mkProd_or_LetIn mon (ext0 @ ext) in
-  let mon = Vars.substnl [dummy] 2 mon in
-  (sigma, mon)
-
-let prod_mon na t u =
-(*   box_type t >>= fun t_ -> *)
-(*   rel_type t >>= fun rel_ -> *)
-(*   in_var (box (fun env fctx sigma -> (sigma, translate_var fctx 1))) >>= fun x -> *)
-  (** There is hidden variable up there *)
-(*   let t_ = Vars.lift 1 t_ in *)
-(*   let rel_ = Vars.lift 2 rel_ in *)
-(*   let relarg = mkOptApp (rel_, [| Vars.liftn 1 2 x |]) in *)
-(*   return (mkProd (na, t_, (*mkArrow relarg*) mkProp)) *)
-  return mkProp
-
-let dummy_mon = mkProp
-
 (** Given a type A, build x : [[A]], xᴿ : x ||- [[A]] *)
 let mkParamType t =
   box_type t >>= fun t_ ->
@@ -286,10 +252,30 @@ let in_var na t f =
   let env = Environ.push_rel_context ctx env in
   f ctx env fctx sigma
 
-let in_extend f = fun env fctx sigma ->
+(** Parametricity conditions. Rel1 is bound to a boxed term of the right type *)
+
+let type_mon env fctx sigma =
+  let cat = fctx.category in
+  let fctx = add_variable fctx in
+  let eq = Coqlib.gen_constant "" ["Init"; "Logic"] "eq" in
+  let (sigma, s) = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
   let (ext, fctx) = extend fctx in
-  let env = Environ.push_rel_context ext env in
-  f ext env fctx sigma
+  let (ext0, fctx) = extend fctx in
+  (** (A q f).type r g *)
+  let lhs = mkApp (mkOptProj (mkApp (mkRel 5, [| mkRel 4; mkRel 3 |])), [| mkRel 2; mkRel 1 |]) in
+  (** (A r (f o g)).type r id *)
+  let rhs = mkApp (mkOptProj (mkApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |])), [| mkRel 2; refl cat (mkRel 2) |]) in
+  let mon = mkApp (eq, [| mkSort s; lhs; rhs |]) in
+  let mon = it_mkProd_or_LetIn mon (ext0 @ ext) in
+  let mon = Vars.substnl [dummy] 2 mon in
+  (sigma, mon)
+
+let prod_mon na t u =
+  in_var na t begin fun var ->
+    return (it_mkProd_or_LetIn mkProp var)
+  end
+
+let dummy_mon = mkProp
 
 (** Forcing translation core *)
 
