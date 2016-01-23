@@ -9,53 +9,22 @@ Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40)
 
 Ltac _force c := force Obj Hom c.
 
+Forcing Translate bool using Obj Hom.
+Forcing Translate nat using Obj Hom.
+Forcing Translate list using Obj Hom.
+
+Inductive vect (A : Type) : nat -> Type :=
+| nilv : vect A 0
+| consv : A -> forall n, vect A n -> vect A (S n).
+
+Forcing Translate vect using Obj Hom.
+
 Goal True.
 Proof.
-_force (fun (A : Type) (x : A) => x).
-_force (fun (A : Type) (P : forall x : A, Type) (x : A) => P x).
-_force (forall A : Type, (A -> Type) -> A -> Type).
-_force (fun (A : Type) (x : A) (y : A) => forall (P : A -> Type), P x -> P y).
-_force (forall A : Type, A -> A -> Type).
-(* _force ((fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A)). *)
-_force (fun (A B : Type) (x : A) (y : B) => forall (P : A -> B -> Type) (Q : B -> Type), P x y -> Q y).
+_force (fun A n (v : vect A n) => 
+          match v in vect _ n return (match n with |0 => bool |_ => nat end) with 
+            |nilv _ => true 
+            |consv _ _ x r => 1 
+          end).
 exact I.
 Qed.
-
-Definition foo := fun A (x : A) => x.
-Definition bar := foo (foo (forall A : Type, A -> A) (fun A (x : A) => x) Type Type).
-Definition qux := (fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A).
-Definition quz := Type -> Type.
-Definition eq := fun (A : Type) (x y : A) => forall (P : A -> Prop), P x -> P y.
-
-Forcing Translate list using Obj Hom.
-Forcing Translate sum using Obj Hom.
-Forcing Translate nat using Obj Hom.
-
-Scheme natᶠ_rect := Induction for natᶠ Sort Type.
-
-Forcing Definition idn : nat -> nat using Obj Hom.
-Proof.
-  intros p n.
-  specialize (n p #).
-  induction n as [|p n IHn].
-  + apply Oᶠ.
-  + apply Sᶠ, IHn.
-Defined.  
-
-Print sum.
-Print sumᶠ.
-
-Definition baz := sum Type Type.
-Forcing Translate baz using Obj Hom.
-
-Print bazᶠ.
-
-Forcing Definition mlk : forall A, list A using Obj Hom.
-Proof.
-compute.
-exact nilᶠ.
-Defined.
-
-Definition test_let := let X := forall A, A in X -> X.
-
-Forcing Translate test_let using Obj Hom.

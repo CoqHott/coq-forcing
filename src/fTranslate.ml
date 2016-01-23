@@ -221,11 +221,10 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
    let ind_ = get_inductive fctx ci.ci_ind in
    let ci_ = Inductiveops.make_case_info env ind_ ci.ci_pp_info.style in
    let (sigma, c_) = otranslate env fctx sigma c in
-   (* let (sigma, r_) = otranslate_type env fctx sigma r in *)
-   let fix_return_clause env fctx sigma r_ =
-    (** The return clause structure is fun indexes self => Q
-        All indices must be boxed, but self only needs to be translated *)
-     let (args, r_) = decompose_lam_assum r_ in
+   let fix_return_clause env fctx sigma r =
+     (** The return clause structure is fun indexes self => Q
+         All indices must be boxed, but self only needs to be translated *)
+     let (args, r_) = decompose_lam_assum r in
      let ((na, _, self), args) = match args with h :: t -> (h, t) | _ -> assert false in
      let fold (sigma, fctx) (na, o, u) = 
       (** For every translated index, the corresponding variable is added
@@ -235,14 +234,15 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
        (sigma, fctx), (na, o, u_)
      in
      let (sigma, fctx), args = CList.fold_map fold (sigma, fctx) args in
-     let last = last_condition fctx + List.length args in
      let (sigma, self_) = otranslate_type env fctx sigma self in
-     let self_ = Vars.substl [refl fctx.category (mkRel last); (mkRel last)] self_ in
-     let fctx = add_variable fctx in
-     let (sigma, r_) = otranslate_type env fctx sigma r_ in
-    (* let r_ = mkApp (r_, [| mkRel (last + 1); refl fctx.category (mkRel (last + 1)) |]) in *)
-     let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in
-     msg_info (Termops.print_constr r_);
+     let fctx_ = add_variable fctx in
+     let (sigma, r_) = otranslate_type env fctx_ sigma r_ in
+     let (ext, ufctx) = extend fctx in
+     let selfid = Id.of_string "self" in
+     let r_ = Vars.substnl [it_mkLambda_or_LetIn (mkVar selfid) ext] 1 (Vars.lift 1 r_) in
+     let r_ = Reductionops.nf_beta Evd.empty r_ in 
+     let r_ = Vars.subst_var selfid r_ in
+     let r_ = it_mkLambda_or_LetIn r_ ((na, None, self_) :: args) in 
      (sigma, r_)       
    in
    let (sigma, r_) = fix_return_clause env fctx sigma r in
