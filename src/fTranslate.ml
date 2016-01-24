@@ -225,30 +225,30 @@ let box_type t =
 let rel_type t =
   t >>= fun t_ -> return (mkOptMono t_)
 
-let translate_var fctx n =
+let translate_var n = fun env fctx sigma ->
   let p = mkRel (last_condition fctx) in
   let f = morphism_var n fctx in
   let m = get_var_shift n fctx in
-  mkApp (mkRel m, [| p; f |])
+  (sigma, mkApp (mkRel m, [| p; f |]))
 
 let mkHole = fun env fctx sigma ->
   let (sigma, (typ, _)) = Evarutil.new_type_evar env sigma Evd.univ_flexible_alg in
   let (sigma, c) = Evarutil.new_evar env sigma typ in
   (sigma, c)
 
-let in_dummy_var f = fun env fctx sigma ->
-  let fctx = add_variable fctx in
-  f env fctx sigma
-
-(** Given a type A, build x : [[A]], xᴿ : x ||- [[A]] *)
+(** Given a type A, builds Rel 1 ||- [[A]] *)
 let mkParamType self t =
+  (** Hack: make the translation think we're under a variable *)
+  let in_dummy_var f = fun env fctx sigma ->
+    let fctx = add_variable fctx in
+    f env fctx sigma
+  in
   let t = Vars.lift 1 t in
   in_dummy_var begin in_extend begin fun ext ->
     rel_type (self.otranslate t) >>= fun rel_ ->
     self.rtranslate t >>= fun rw ->
     in_extend begin fun ext ->
-      get_category >>= fun cat ->
-      (fun env fctx sigma -> (sigma, translate_var fctx 1)) >>= fun var ->
+      translate_var 1 >>= fun var ->
       fresh_constant fcast >>= fun cast ->
       mkHole >>= fun typ1 ->
       mkHole >>= fun typ2 ->
@@ -301,9 +301,7 @@ let rec otranslate c =
 let self = { otranslate = otranslate; rtranslate = rtranslate } in
 match kind_of_term c with
 | Rel n ->
-  fun env fctx sigma ->
-  let ans = translate_var fctx n in
-  (sigma, ans)
+  translate_var n
 
 | Sort s ->
   in_extend begin fun ext0 ->
