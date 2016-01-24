@@ -236,35 +236,35 @@ let mkHole = fun env fctx sigma ->
   let (sigma, c) = Evarutil.new_evar env sigma typ in
   (sigma, c)
 
+let in_dummy_var f = fun env fctx sigma ->
+  let fctx = add_variable fctx in
+  f env fctx sigma
+
 (** Given a type A, build x : [[A]], xᴿ : x ||- [[A]] *)
-let mkParamType t t_p =
-  box_type t >>= fun t_ ->
-  in_extend begin fun ext ->
-    let ext = liftn_named_context 1 0 ext in
-    rel_type t >>= fun rel_ ->
-    let rel_ = Vars.liftn 1 3 rel_ in
+let mkParamType self t =
+  let t = Vars.lift 1 t in
+  in_dummy_var begin in_extend begin fun ext ->
+    rel_type (self.otranslate t) >>= fun rel_ ->
+    self.rtranslate t >>= fun rw ->
     in_extend begin fun ext ->
-      let ext = liftn_named_context 1 2 ext in
       get_category >>= fun cat ->
-      let var = mkApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |]) in
+      (fun env fctx sigma -> (sigma, translate_var fctx 1)) >>= fun var ->
       fresh_constant fcast >>= fun cast ->
       mkHole >>= fun typ1 ->
       mkHole >>= fun typ2 ->
-      t_p >>= fun rw ->
-      let rw = Vars.liftn 1 5 rw in
-      let rw = mkOptApp (rw, [| mkRel 2; mkRel 1 |]) in
+      let rw = mkOptApp (Vars.lift 2 rw, [| mkRel 2; mkRel 1 |]) in
       let var = mkApp (mkConstU cast, [| typ1; typ2; rw; var |]) in
       return (it_mkLambda_or_LetIn var ext)
     end >>= fun x ->
     let rel_ = mkOptApp (rel_, [| x |]) in
-    return (it_mkProd_or_LetIn rel_ ext)
-  end >>= fun tr_ ->
-  return (t_, tr_)
+    let ans = it_mkProd_or_LetIn rel_ ext in
+    let ans = Vars.subst1 mkProp ans in
+    return ans
+  end end
 
 let in_var self na t f =
-  let t_p = self.rtranslate t in
-  let t = self.otranslate t in
-  mkParamType t t_p >>= fun (t_, tr_) env fctx sigma ->
+  box_type (self.otranslate t) >>= fun t_ ->
+  mkParamType self t >>= fun tr_ env fctx sigma ->
   let fctx = add_variable fctx in
   let ctx = [(rel_name na, None, tr_); (na, None, t_)] in
   let env = Environ.push_rel_context ctx env in
