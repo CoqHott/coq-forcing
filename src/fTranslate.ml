@@ -169,6 +169,11 @@ let rec mmap (f : 'a -> 'b t) (l : 'a list) : 'b list t = match l with
 | [] -> return []
 | x :: l -> f x >>= fun x -> mmap f l >>= fun l -> return (x :: l)
 
+type rec_f = {
+  otranslate : constr -> constr t;
+  rtranslate : constr -> constr t;
+}
+
 let in_extend f = fun env fctx sigma ->
   let (ext, fctx) = extend fctx in
   let env = Environ.push_rel_context ext env in
@@ -256,7 +261,9 @@ let mkParamType t t_p =
   end >>= fun tr_ ->
   return (t_, tr_)
 
-let in_var na t t_p f =
+let in_var self na t f =
+  let t_p = self.rtranslate t in
+  let t = self.otranslate t in
   mkParamType t t_p >>= fun (t_, tr_) env fctx sigma ->
   let fctx = add_variable fctx in
   let ctx = [(rel_name na, None, tr_); (na, None, t_)] in
@@ -281,8 +288,8 @@ let type_mon env fctx sigma =
   let mon = Vars.substnl [dummy] 2 mon in
   (sigma, mon)
 
-let prod_mon na t t_p u =
-  in_var na t t_p begin fun var ->
+let prod_mon self na t u =
+  in_var self na t begin fun var ->
     return (it_mkProd_or_LetIn mkProp var)
   end
 
@@ -290,7 +297,9 @@ let dummy_mon = mkProp
 
 (** Forcing translation core *)
 
-let rec otranslate c = match kind_of_term c with
+let rec otranslate c =
+let self = { otranslate = otranslate; rtranslate = rtranslate } in
+match kind_of_term c with
 | Rel n ->
   fun env fctx sigma ->
   let ans = translate_var fctx n in
@@ -314,18 +323,18 @@ let rec otranslate c = match kind_of_term c with
 
 | Prod (na, t, u) ->
   in_extend begin fun ext0 ->
-    in_var na (otranslate t) (rtranslate t) begin fun var ->
+    in_var self na t begin fun var ->
       otranslate u >>= fun u_ ->
       projfType u_ >>= fun u_ ->
       return (it_mkProd_or_LetIn u_ var)
     end >>= fun ans ->
     return (it_mkLambda_or_LetIn ans ext0)
   end >>= fun lam ->
-  prod_mon na (otranslate t) (rtranslate t) (otranslate u) >>= fun mon ->
+  prod_mon self na t u >>= fun mon ->
   mkfType lam mon
 
 | Lambda (na, t, u) ->
-  in_var na (otranslate t) (rtranslate t) begin fun var ->
+  in_var self na t begin fun var ->
     otranslate u >>= fun u_ ->
     return (it_mkLambda_or_LetIn u_ var)
   end
@@ -369,7 +378,9 @@ and otranslate_boxed_type t env fctx sigma =
   let t_ = it_mkProd_or_LetIn t_ ext in
   (sigma, t_)
 
-and rtranslate t = match kind_of_term t with
+and rtranslate t =
+let self = { otranslate = otranslate; rtranslate = rtranslate } in
+match kind_of_term t with
 | Rel n ->
   fun env fctx sigma ->
     let f = morphism_var n fctx in
