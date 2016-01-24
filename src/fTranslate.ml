@@ -181,11 +181,15 @@ let in_extend f = fun env fctx sigma ->
 
 let get_category = (); fun env fctx sigma -> (sigma, fctx.category)
 
-let get_inductive ind = (); fun env fctx sigma ->
+let fresh_inductive ind = (); fun env fctx sigma ->
   Evd.fresh_inductive_instance env sigma ind
 
 let fresh_constant c = (); fun env fctx sigma ->
   Evd.fresh_constant_instance env sigma c
+
+let fresh_universe = (); fun env fctx sigma ->
+  let (sigma, s) = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
+  (sigma, mkSort s)
 
 (** Macros *)
 
@@ -246,12 +250,15 @@ let mkParamType self t =
   let t = Vars.lift 1 t in
   in_dummy_var begin in_extend begin fun ext ->
     rel_type (self.otranslate t) >>= fun rel_ ->
+    self.otranslate t >>= fun typ1 ->
     self.rtranslate t >>= fun rw ->
     in_extend begin fun ext ->
       translate_var 1 >>= fun var ->
       fresh_constant fcast >>= fun cast ->
-      mkHole >>= fun typ1 ->
-      mkHole >>= fun typ2 ->
+      self.otranslate t >>= fun typ2 ->
+      projfType typ2 >>= fun typ2 ->
+      let typ1 = mkOptProj (Vars.lift 2 typ1) in
+      let typ1 = mkOptApp (typ1, [| mkRel 2; mkRel 1 |]) in
       let rw = mkOptApp (Vars.lift 2 rw, [| mkRel 2; mkRel 1 |]) in
       let var = mkApp (mkConstU cast, [| typ1; typ2; rw; var |]) in
       return (it_mkLambda_or_LetIn var ext)
@@ -306,7 +313,7 @@ match kind_of_term c with
 | Sort s ->
   in_extend begin fun ext0 ->
     get_category >>= fun cat ->
-    get_inductive cType >>= fun pi ->
+    fresh_inductive cType >>= fun pi ->
     let tpe = mkApp (mkIndU pi, [| cat.cat_obj; hom_type cat; mkRel 2 |]) in
     return (it_mkLambda_or_LetIn tpe ext0)
   end >>= fun lam ->
@@ -388,10 +395,10 @@ match kind_of_term t with
 
 | Sort s ->
   in_extend begin fun ext ->
-    mkHole >>= fun a ->
-    mkHole >>= fun x ->
+    fresh_universe >>= fun u ->
+    otranslate_type (mkSort s) >>= fun uT ->
     let refl = Coqlib.gen_constant "" ["Init"; "Logic"] "eq_refl" in
-    let refl = mkApp (refl, [| a; x |]) in
+    let refl = mkApp (refl, [| u; uT |]) in
     return (it_mkLambda_or_LetIn refl ext)
   end
 
@@ -400,10 +407,10 @@ match kind_of_term t with
 
 | Prod (na, t, u) ->
   in_extend begin fun ext ->
-    mkHole >>= fun a ->
-    mkHole >>= fun x ->
+    fresh_universe >>= fun u ->
+    otranslate_type (mkProd (na, t, u)) >>= fun uT ->
     let refl = Coqlib.gen_constant "" ["Init"; "Logic"] "eq_refl" in
-    let refl = mkApp (refl, [| a; x |]) in
+    let refl = mkApp (refl, [| u; uT |]) in
     return (it_mkLambda_or_LetIn refl ext)
   end
 
