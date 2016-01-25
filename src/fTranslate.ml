@@ -210,7 +210,7 @@ let mkfType lam mon env fctx sigma =
   let (ext0, fctx0) = extend fctx in
   let self = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 lam, [| mkRel 2; mkRel 1 |])) ext0 in
   let mon = mkLambda (Anonymous, self, mon) in
-  let tpe = mkApp (mkConstructU pc, [| fctx.category.cat_obj; hom_type fctx.category; mkRel (last_condition fctx); lam; mon |]) in
+  let tpe = mkApp (mkConstructU pc, [| fctx.category.cat_obj; fctx.category.cat_hom; mkRel (last_condition fctx); lam; mon |]) in
   (sigma, tpe)
 
 let box t =
@@ -334,7 +334,7 @@ match kind_of_term c with
   in_extend begin fun ext0 ->
     get_category >>= fun cat ->
     fresh_inductive cType >>= fun pi ->
-    let tpe = mkApp (mkIndU pi, [| cat.cat_obj; hom_type cat; mkRel 2 |]) in
+    let tpe = mkApp (mkIndU pi, [| cat.cat_obj; cat.cat_hom; mkRel 2 |]) in
     return (it_mkLambda_or_LetIn tpe ext0)
   end >>= fun lam ->
   type_mon >>= fun mon ->
