@@ -53,66 +53,33 @@ Definition Yoneda_fun := forall
 
 (* Here is the result, for those who don't have the plugin of Marc Lasson *)
 
-Definition Yoneda_fun_R :=
-fun
-  H
-   H0 : forall (P : Type) (Hom : P -> P -> Type),
-        (forall p q r : P, Hom q r -> Hom p q -> Hom p r) ->
-        (forall p : P, Hom p p) -> forall p q : P, YHom P Hom p q =>
-forall (P₁ P₂ : Type) (P_R : P₁ -> P₂ -> Type) (Hom₁ : P₁ -> P₁ -> Type)
-  (Hom₂ : P₂ -> P₂ -> Type)
-  (Hom_R : forall (H1 : P₁) (H2 : P₂),
-           P_R H1 H2 ->
-           forall (H3 : P₁) (H4 : P₂),
-           P_R H3 H4 -> Hom₁ H1 H3 -> Hom₂ H2 H4 -> Type)
-  (Comp₁ : forall p q r : P₁, Hom₁ q r -> Hom₁ p q -> Hom₁ p r)
-  (Comp₂ : forall p q r : P₂, Hom₂ q r -> Hom₂ p q -> Hom₂ p r),
-(forall (p₁ : P₁) (p₂ : P₂) (p_R : P_R p₁ p₂) (q₁ : P₁)
-   (q₂ : P₂) (q_R : P_R q₁ q₂) (r₁ : P₁) (r₂ : P₂)
-   (r_R : P_R r₁ r₂) (H1 : Hom₁ q₁ r₁) (H2 : Hom₂ q₂ r₂),
- Hom_R q₁ q₂ q_R r₁ r₂ r_R H1 H2 ->
- forall (H3 : Hom₁ p₁ q₁) (H4 : Hom₂ p₂ q₂),
- Hom_R p₁ p₂ p_R q₁ q₂ q_R H3 H4 ->
- Hom_R p₁ p₂ p_R r₁ r₂ r_R (Comp₁ p₁ q₁ r₁ H1 H3) (Comp₂ p₂ q₂ r₂ H2 H4)) ->
-forall (Id₁ : forall p : P₁, Hom₁ p p) (Id₂ : forall p : P₂, Hom₂ p p),
-(forall (p₁ : P₁) (p₂ : P₂) (p_R : P_R p₁ p₂),
- Hom_R p₁ p₂ p_R p₁ p₂ p_R (Id₁ p₁) (Id₂ p₂)) ->
-forall (p₁ : P₁) (p₂ : P₂) (p_R : P_R p₁ p₂) (q₁ : P₁)
-  (q₂ : P₂) (q_R : P_R q₁ q₂),
-(fun (P₁0 P₂0 : Type) (P_R0 : P₁0 -> P₂0 -> Type)
-   (Hom₁0 : P₁0 -> P₁0 -> Type) (Hom₂0 : P₂0 -> P₂0 -> Type)
-   (Hom_R0 : forall (H1 : P₁0) (H2 : P₂0),
-             P_R0 H1 H2 ->
-             forall (H3 : P₁0) (H4 : P₂0),
-             P_R0 H3 H4 -> Hom₁0 H1 H3 -> Hom₂0 H2 H4 -> Type)
-   (p₁0 : P₁0) (p₂0 : P₂0) (p_R0 : P_R0 p₁0 p₂0)
-   (q₁0 : P₁0) (q₂0 : P₂0) (q_R0 : P_R0 q₁0 q₂0)
-   (H1 : forall r : P₁0, Y P₁0 Hom₁0 p₁0 r -> Y P₁0 Hom₁0 q₁0 r)
-   (H2 : forall r : P₂0, Y P₂0 Hom₂0 p₂0 r -> Y P₂0 Hom₂0 q₂0 r) =>
- forall (r₁ : P₁0) (r₂ : P₂0) (r_R : P_R0 r₁ r₂)
-   (H3 : Y P₁0 Hom₁0 p₁0 r₁) (H4 : Y P₂0 Hom₂0 p₂0 r₂),
- (fun (P₁1 P₂1 : Type) (P_R1 : P₁1 -> P₂1 -> Type)
-    (Hom₁1 : P₁1 -> P₁1 -> Type) (Hom₂1 : P₂1 -> P₂1 -> Type)
-    (Hom_R1 : forall (H5 : P₁1) (H6 : P₂1),
-              P_R1 H5 H6 ->
-              forall (H7 : P₁1) (H8 : P₂1),
-              P_R1 H7 H8 -> Hom₁1 H5 H7 -> Hom₂1 H6 H8 -> Type)
-    (p₁1 : P₁1) (p₂1 : P₂1) (p_R1 : P_R1 p₁1 p₂1)
-    (r₁0 : P₁1) (r₂0 : P₂1) (r_R0 : P_R1 r₁0 r₂0) =>
-  Hom_R1 r₁0 r₂0 r_R0 p₁1 p₂1 p_R1) P₁0 P₂0 P_R0 Hom₁0 Hom₂0 Hom_R0 p₁0
-   p₂0 p_R0 r₁ r₂ r_R H3 H4 ->
- (fun (P₁1 P₂1 : Type) (P_R1 : P₁1 -> P₂1 -> Type)
-    (Hom₁1 : P₁1 -> P₁1 -> Type) (Hom₂1 : P₂1 -> P₂1 -> Type)
-    (Hom_R1 : forall (H5 : P₁1) (H6 : P₂1),
-              P_R1 H5 H6 ->
-              forall (H7 : P₁1) (H8 : P₂1),
-              P_R1 H7 H8 -> Hom₁1 H5 H7 -> Hom₂1 H6 H8 -> Type)
-    (p₁1 : P₁1) (p₂1 : P₂1) (p_R1 : P_R1 p₁1 p₂1)
-    (r₁0 : P₁1) (r₂0 : P₂1) (r_R0 : P_R1 r₁0 r₂0) =>
-  Hom_R1 r₁0 r₂0 r_R0 p₁1 p₂1 p_R1) P₁0 P₂0 P_R0 Hom₁0 Hom₂0 Hom_R0 q₁0
-   q₂0 q_R0 r₁ r₂ r_R (H1 r₁ H3) (H2 r₂ H4)) P₁ P₂ P_R Hom₁ Hom₂ Hom_R p₁
-  p₂ p_R q₁ q₂ q_R (H P₁ Hom₁ Comp₁ Id₁ p₁ q₁)
-  (H0 P₂ Hom₂ Comp₂ Id₂ p₂ q₂).
+Definition Yoneda_fun_R := fun (H H0 : Yoneda_fun) =>
+   forall (P₁ P₂ : Type) (P_R : P₁ -> P₂ -> Type)
+     (Hom₁ : P₁ -> P₁ -> Type) (Hom₂ : P₂ -> P₂ -> Type)
+     (Hom_R : forall (H1 : P₁) (H2 : P₂),
+              P_R H1 H2 ->
+              forall (H3 : P₁) (H4 : P₂),
+              P_R H3 H4 -> Hom₁ H1 H3 -> Hom₂ H2 H4 -> Type)
+     (Comp₁ : forall p q r : P₁, Hom₁ q r -> Hom₁ p q -> Hom₁ p r)
+     (Comp₂ : forall p q r : P₂, Hom₂ q r -> Hom₂ p q -> Hom₂ p r),
+   (forall (p₁ : P₁) (p₂ : P₂) (p_R : P_R p₁ p₂) 
+      (q₁ : P₁) (q₂ : P₂) (q_R : P_R q₁ q₂) (r₁ : P₁) 
+      (r₂ : P₂) (r_R : P_R r₁ r₂) (H1 : Hom₁ q₁ r₁) 
+      (H2 : Hom₂ q₂ r₂),
+    Hom_R q₁ q₂ q_R r₁ r₂ r_R H1 H2 ->
+    forall (H3 : Hom₁ p₁ q₁) (H4 : Hom₂ p₂ q₂),
+    Hom_R p₁ p₂ p_R q₁ q₂ q_R H3 H4 ->
+    Hom_R p₁ p₂ p_R r₁ r₂ r_R (Comp₁ p₁ q₁ r₁ H1 H3)
+      (Comp₂ p₂ q₂ r₂ H2 H4)) ->
+   forall (Id₁ : forall p : P₁, Hom₁ p p) (Id₂ : forall p : P₂, Hom₂ p p),
+   (forall (p₁ : P₁) (p₂ : P₂) (p_R : P_R p₁ p₂),
+    Hom_R p₁ p₂ p_R p₁ p₂ p_R (Id₁ p₁) (Id₂ p₂)) ->
+   forall (p₁ : P₁) (p₂ : P₂) (p_R : P_R p₁ p₂) (q₁ : P₁) 
+     (q₂ : P₂) (q_R : P_R q₁ q₂) (r₁ : P₁) (r₂ : P₂) 
+     (r_R : P_R r₁ r₂) (H3 : Hom₁ r₁ p₁) (H4 : Hom₂ r₂ p₂),
+   Hom_R r₁ r₂ r_R p₁ p₂ p_R H3 H4 ->
+   Hom_R r₁ r₂ r_R q₁ q₂ q_R (H P₁ Hom₁ Comp₁ Id₁ p₁ q₁ r₁ H3)
+         (H0 P₂ Hom₂ Comp₂ Id₂ p₂ q₂ r₂ H4).
 
 Axiom Yoneda_fun_param_thm : forall (f g:Yoneda_fun), Yoneda_fun_R f g.
 
@@ -160,7 +127,8 @@ Definition Yoneda_fun_param (f:Yoneda_fun) (P : Type)
          transport (fun X : P => Hom X p₁) p_R
            (transport (fun X : P => Hom p₂ X) p_R (Id p₂))).
    intros. destruct p_R. reflexivity.
-   exact (f_R Comp Comp H_Comp Id Id H_Id p p eq_refl q q eq_refl r r eq_refl k k eq_refl).
+   specialize (f_R Comp Comp H_Comp Id Id H_Id). simpl in f_R. 
+   exact (f_R p p eq_refl q q eq_refl r r eq_refl k k eq_refl).
 Defined. 
 
 Definition Yoneda_embedding_rl (P : Type)
