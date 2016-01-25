@@ -45,7 +45,7 @@ fun P pt pf b => match b with
               | false => pf
               end.
 
-Forcing Translate bool_rect' using Obj Hom.
+Fail Forcing Translate bool_rect' using Obj Hom.
 
 
 End Bool.
