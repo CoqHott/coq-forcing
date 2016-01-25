@@ -60,6 +60,7 @@ let cmono = (cType, 2)
 let ptype = Projection.make (Constant.make2 forcing_module (Label.make "type")) false
 let pmono = Projection.make (Constant.make2 forcing_module (Label.make "mono")) false
 let fcast = Constant.make3 forcing_module DirPath.empty (Label.make "cast")
+let frealizes = Constant.make3 forcing_module DirPath.empty (Label.make "realizes")
 
 (** Optimization of cuts *)
 
@@ -248,32 +249,14 @@ let mkHole = fun env fctx sigma ->
 
 (** Given a type A, builds Rel 1 ||- [[A]] *)
 let mkParamType self t =
-  (** Hack: make the translation think we're under a variable *)
-  let in_dummy_var f = fun env fctx sigma ->
-    let fctx = add_variable fctx in
-    f env fctx sigma
-  in
-  let t = Vars.lift 1 t in
-  in_dummy_var begin in_extend begin fun ext ->
-    rel_type (self.otranslate t) >>= fun rel_ ->
-    self.otranslate t >>= fun typ1 ->
-    self.rtranslate t >>= fun rw ->
-    in_extend begin fun ext ->
-      translate_var 1 >>= fun var ->
-      fresh_constant fcast >>= fun cast ->
-      self.otranslate t >>= fun typ2 ->
-      projfType typ2 >>= fun typ2 ->
-      let typ1 = mkOptProj (Vars.lift 2 typ1) in
-      let typ1 = mkOptApp (typ1, [| mkRel 2; mkRel 1 |]) in
-      let rw = mkOptApp (Vars.lift 2 rw, [| mkRel 2; mkRel 1 |]) in
-      let var = mkApp (mkConstU cast, [| typ1; typ2; rw; var |]) in
-      return (it_mkLambda_or_LetIn var ext)
-    end >>= fun x ->
-    let rel_ = mkOptApp (rel_, [| x |]) in
-    let ans = it_mkProd_or_LetIn rel_ ext in
-    let ans = Vars.subst1 mkProp ans in
-    return ans
-  end end
+  get_category >>= fun cat ->
+  fresh_constant frealizes >>= fun frealizes ->
+  box (self.otranslate t) >>= fun t_ ->
+  box (self.rtranslate t) >>= fun tr_ ->
+  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun last ->
+  let ans = mkApp (mkConstU frealizes, [| cat.cat_obj; cat.cat_hom; mkRel last; t_; tr_ |]) in
+  let ans = Vars.lift 1 ans in
+  return (mkApp (ans, [| mkRel 1 |]))
 
 let in_var self na t f =
   box_type (self.otranslate t) >>= fun t_ ->
