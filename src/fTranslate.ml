@@ -61,6 +61,7 @@ let ptype = Projection.make (Constant.make2 forcing_module (Label.make "type")) 
 let pmono = Projection.make (Constant.make2 forcing_module (Label.make "mono")) false
 let fcast = Constant.make3 forcing_module DirPath.empty (Label.make "cast")
 let frealizes = Constant.make3 forcing_module DirPath.empty (Label.make "realizes")
+let ftypemon = Constant.make3 forcing_module DirPath.empty (Label.make "Typeᶿ")
 
 (** Optimization of cuts *)
 
@@ -268,21 +269,12 @@ let in_var self na t f =
 
 (** Parametricity conditions. Rel1 is bound to a boxed term of the right type *)
 
-let type_mon env fctx sigma =
-  let cat = fctx.category in
-  let fctx = add_variable fctx in
-  let eq = Coqlib.gen_constant "" ["Init"; "Logic"] "eq" in
-  let (sigma, s) = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
-  let (ext, fctx) = extend fctx in
-  let (ext0, fctx) = extend fctx in
-  (** (A q f).type r g *)
-  let lhs = mkOptApp (mkOptProj (mkOptApp (mkRel 5, [| mkRel 4; mkRel 3 |])), [| mkRel 2; mkRel 1 |]) in
-  (** (A r (f o g)).type r id *)
-  let rhs = mkOptApp (mkOptProj (mkOptApp (mkRel 5, [| mkRel 2; trns cat dummy dummy (mkRel 2) (mkRel 3) (mkRel 1) |])), [| mkRel 2; refl cat (mkRel 2) |]) in
-  let mon = mkApp (eq, [| mkSort s; lhs; rhs |]) in
-  let mon = it_mkProd_or_LetIn mon (ext0 @ ext) in
-  let mon = Vars.substnl [dummy] 2 mon in
-  (sigma, mon)
+let type_mon =
+  get_category >>= fun cat ->
+  fresh_constant ftypemon >>= fun ftypemon ->
+  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun last ->
+  let ans = mkApp (mkConstU ftypemon, [| cat.cat_obj; cat.cat_hom; mkRel last |]) in
+  return (mkApp (Vars.lift 1 ans, [| mkRel 1 |]))
 
 let prod_mon self na t u =
   let in_dummy_var f = fun env fctx sigma ->
