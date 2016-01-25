@@ -235,6 +235,12 @@ let translate_var n = fun env fctx sigma ->
   let m = get_var_shift n fctx in
   (sigma, mkApp (mkRel m, [| p; f |]))
 
+let translate_pvar n = fun env fctx sigma ->
+  let p = mkRel (last_condition fctx) in
+  let f = morphism_var n fctx in
+  let m = get_var_shift n fctx - 1 in
+  (sigma, mkApp (mkRel m, [| p; f |]))
+
 let mkHole = fun env fctx sigma ->
   let (sigma, (typ, _)) = Evarutil.new_type_evar env sigma Evd.univ_flexible_alg in
   let (sigma, c) = Evarutil.new_evar env sigma typ in
@@ -296,9 +302,23 @@ let type_mon env fctx sigma =
   (sigma, mon)
 
 let prod_mon self na t u =
-  in_var self na t begin fun var ->
-    return (it_mkProd_or_LetIn mkProp var)
-  end
+  let in_dummy_var f = fun env fctx sigma ->
+    let fctx = add_variable fctx in
+    f env fctx sigma
+  in
+  in_dummy_var begin in_var self na t begin fun var ->
+    mkParamType self u >>= fun u_ ->
+    in_extend begin fun ext ->
+      translate_var 2 >>= fun f ->
+      box (translate_var 1) >>= fun x ->
+      box (translate_pvar 1) >>= fun px ->
+      let arg = mkApp (f, [| x; px |]) in
+      return (it_mkLambda_or_LetIn arg ext)
+    end >>= fun arg ->
+    let u_ = Vars.subst1 arg u_ in
+    return (it_mkProd_or_LetIn u_ var)
+  end end >>= fun ans ->
+  return (Vars.subst1 dummy ans)
 
 let dummy_mon = mkProp
 
