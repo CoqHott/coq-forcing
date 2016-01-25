@@ -30,22 +30,12 @@ fun b => match b return b = b with true => eq_refl | false => eq_refl end.
 Fail Forcing Translate eta_eq using Obj Hom.
 
 Definition bool_rect : forall P,
-  P true -> P false -> forall (b : bool), if b then P true else P false :=
-fun P pt pf b => match b with
-              | true => pt
-              | false => pf
-              end.
+    P true -> P false -> forall (b : bool), bool_mem _ b P :=
+  fun P pt pf b => match b with
+                | true => pt
+                | false => pf
+                end.
 
 Forcing Translate bool_rect using Obj Hom.
-
-Definition bool_rect' : forall P,
-  P true -> P false -> forall (b : bool), bool_mem _ b P :=
-fun P pt pf b => match b with
-              | true => pt
-              | false => pf
-              end.
-
-Fail Forcing Translate bool_rect' using Obj Hom.
-
 
 End Bool.
