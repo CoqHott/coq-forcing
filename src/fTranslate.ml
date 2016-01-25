@@ -239,6 +239,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
      let (sigma, r_) = otranslate_type env fctx_ sigma r_ in
      let (ext, ufctx) = extend fctx in
      let selfid = Id.of_string "self" in
+     let r_ = Reductionops.nf_betadeltaiota env Evd.empty r_ in 
      let r_ = Vars.substnl [it_mkLambda_or_LetIn (mkVar selfid) ext] 1 (Vars.lift 1 r_) in
      let r_ = Reductionops.nf_beta Evd.empty r_ in 
      let r_ = Vars.subst_var selfid r_ in
