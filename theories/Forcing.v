@@ -45,9 +45,42 @@ Definition Prodᶿ {p}
       (fun p1 (α0 : p0 ≤ p1) => Aᴿ p1 (α ∘ α0))
       x),
     Typeᶠ p0)
-(*   (Bᴿ : Typeᶿ A) *)
-  := tt.
+  (Bᴿ : forall p0 (α : p ≤ p0)
+    (x : forall p1 (α0 : p0 ≤ p1), type _ (A p1 (α ∘ α0)) p1 #)
+    (xᴿ : realizes _
+      (fun p1 (α0 : p0 ≤ p1) => A p1 (α ∘ α0))
+      (fun p1 (α0 : p0 ≤ p1) => Aᴿ p1 (α ∘ α0))
+      x),
+    Typeᶿ
+      (fun p1 (α0 : p0 ≤ p1) =>
+        B p1 (α ∘ α0)
+          (fun p2 (α1 : p1 ≤ p2) => x p2 (α0 ∘ α1))
+          (fun p2 (α1 : p1 ≤ p2) => xᴿ p2 (α0 ∘ α1))))
+  (f : forall p0 (α : p ≤ p0) x xᴿ, type _ (B p0 α x xᴿ) p0 #)
+  :=
 
+    forall
+    (x : forall p0 (α : p ≤ p0), type _ (A p0 α) p0 #)
+    (xᴿ : realizes _
+      (fun p0 (α : p ≤ p0) => A p0 α)
+      (fun p0 (α : p ≤ p0) => Aᴿ p0 α) x),
+    realizes _
+      (fun p0 (α : p ≤ p0) =>
+        B p0 α
+          (fun p1 (α0 : p0 ≤ p1) => x p1 (α ∘ α0))
+          (fun p1 (α0 : p0 ≤ p1) => xᴿ p1 (α ∘ α0)))
+      (fun p0 (α : p ≤ p0) =>
+        Bᴿ p0 α
+          (fun p1 (α0 : p0 ≤ p1) => x p1 (α ∘ α0))
+          (fun p1 (α0 : p0 ≤ p1) => xᴿ p1 (α ∘ α0)) p0 #)
+      (fun p0 (α : p ≤ p0) =>
+        cast (Bᴿ p0 α
+          (fun p1 (α0 : p0 ≤ p1) => x p1 (α ∘ α0))
+          (fun p1 (α0 : p0 ≤ p1) => xᴿ p1 (α ∘ α0)) p0 # p0 #)
+        (f p0 α
+          (fun p1 (α0 : p0 ≤ p1) => x p1 (α ∘ α0))
+          (fun p1 (α0 : p0 ≤ p1) => xᴿ p1 (α ∘ α0))))
+.
 
 End Forcing.
 

@@ -62,6 +62,7 @@ let pmono = Projection.make (Constant.make2 forcing_module (Label.make "mono")) 
 let fcast = Constant.make3 forcing_module DirPath.empty (Label.make "cast")
 let frealizes = Constant.make3 forcing_module DirPath.empty (Label.make "realizes")
 let ftypemon = Constant.make3 forcing_module DirPath.empty (Label.make "Typeᶿ")
+let fprodmon = Constant.make3 forcing_module DirPath.empty (Label.make "Prodᶿ")
 
 (** Optimization of cuts *)
 
@@ -277,23 +278,22 @@ let type_mon =
   return (mkApp (Vars.lift 1 ans, [| mkRel 1 |]))
 
 let prod_mon self na t u =
-  let in_dummy_var f = fun env fctx sigma ->
-    let fctx = add_variable fctx in
-    f env fctx sigma
-  in
-  in_dummy_var begin in_var self na t begin fun var ->
-    mkParamType self u >>= fun u_ ->
-    in_extend begin fun ext ->
-      translate_var 2 >>= fun f ->
-      box (translate_var 1) >>= fun x ->
-      box (translate_pvar 1) >>= fun px ->
-      let arg = mkApp (f, [| x; px |]) in
-      return (it_mkLambda_or_LetIn arg ext)
-    end >>= fun arg ->
-    let u_ = Vars.subst1 arg u_ in
-    return (it_mkProd_or_LetIn u_ var)
-  end end >>= fun ans ->
-  return (Vars.subst1 dummy ans)
+  get_category >>= fun cat ->
+  fresh_constant fprodmon >>= fun fprodmon ->
+  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun last ->
+  let ans = mkApp (mkConstU fprodmon, [| cat.cat_obj; cat.cat_hom; mkRel last |]) in
+  box (self.otranslate t) >>= fun t_ ->
+  box (self.rtranslate t) >>= fun tr_ ->
+  in_extend begin fun ext ->
+    in_var self na t begin fun var ->
+      self.otranslate u >>= fun u_ ->
+      in_extend (fun ext -> self.rtranslate u >>= fun u_ -> return (it_mkLambda_or_LetIn u_ ext)) >>= fun ur_ ->
+      let u_ = it_mkLambda_or_LetIn u_ (var @ ext) in
+      let ur_ = it_mkLambda_or_LetIn ur_ (var @ ext) in
+      return (u_, ur_)
+  end end >>= fun (u_, ur_) ->
+  let ans = mkApp (ans, [| t_; tr_; u_; ur_ |]) in
+  return (mkApp (Vars.lift 1 ans, [| mkRel 1 |]))
 
 let dummy_mon = mkProp
 
