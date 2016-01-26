@@ -112,5 +112,6 @@ Definition Prodᶿ {p}
 End Forcing.
 
 Arguments box {_ _ _ _ _} _ _ _.
+Arguments type {_ _ _} _ _ _.
 
 Notation "t ∈ u " := (realizes _ u _ t) (at level 70, no associativity) : forcing_scope.
