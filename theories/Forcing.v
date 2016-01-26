@@ -62,6 +62,21 @@ Definition Box (p : Obj) (A : BTypeᶠ p) :=
 
 Definition lift {p : Obj} {A} (x : Box p A) {p0} (α : p ≤ p0) : Box p0 (lift_ p _ _ A p0 α) := lift_ p _ _ x p0 α.
 
+Definition mkArrow (p : Obj) (A : BTypeᶠ p) (B : BTypeᶠ p) : BTypeᶠ p.
+Proof.
+simple refine (
+{|
+  box := fun p0 (α : p ≤ p0) => _;
+|}
+).
++ simple refine ({| type := _; mono := _ |}).
+  - simple refine (fun p1 (α0 : p0 ≤ p1) => _).
+    simple refine (Box p1 (lift_ p _ _ A p1 (α ∘ α0)) -> type _ (box _ _ _ B p1 (α ∘ α0)) p1 #).
+  - simple refine (fun f => forall x : Box p0 (lift_ p _ _ A p0 α), _).
+    simple refine (mono _ (box _ _ _ B p0 α) (fun p1 (α0 : p0 ≤ p1) => cast (mon _ _ _ B p0 α p0 # p1 α0) (f p1 α0 (lift x α0)))).
++ refine (fun p0 (α : p ≤ p0) (p1 : Obj) (α0 : p0 ≤ p1) (p2 : Obj) (α1 : p1 ≤ p2) => eq_refl).
+Defined.
+
 Definition Prodᶿ {p}
   (A : forall p0 (α : p ≤ p0), Typeᶠ p0)
   (Aᴿ : Typeᶿ A)
