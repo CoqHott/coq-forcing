@@ -13,10 +13,14 @@ Definition qux := (fun (A : Type) (x : A) => x) Type (forall A : Type, A -> A).
 Definition quz := Type -> Type.
 Definition eq := fun (A : Type) (x y : A) => forall (P : A -> Prop), P x -> P y.
 
+Open Scope forcing_scope.
+
 Forcing Translate foo using Obj Hom.
 Forcing Translate quz using Obj Hom.
 
 Fail Forcing Translate bar using Obj Hom.
+
+
 (* Fail Forcing Translate qux using Obj Hom. *)
 
 (* Forcing Translate eq using Obj Hom. *)

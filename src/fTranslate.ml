@@ -56,13 +56,18 @@ let forcing_module =
 
 let cType = (MutInd.make2 forcing_module (Label.make "Typeᶠ"), 0)
 let ctype = (cType, 1)
-let cmono = (cType, 2)
 let ptype = Projection.make (Constant.make2 forcing_module (Label.make "type")) false
 let pmono = Projection.make (Constant.make2 forcing_module (Label.make "mono")) false
 let fcast = Constant.make3 forcing_module DirPath.empty (Label.make "cast")
 let frealizes = Constant.make3 forcing_module DirPath.empty (Label.make "realizes")
 let ftypemon = Constant.make3 forcing_module DirPath.empty (Label.make "Typeᶿ")
 let fprodmon = Constant.make3 forcing_module DirPath.empty (Label.make "Prodᶿ")
+
+let fBox = Constant.make3 forcing_module DirPath.empty (Label.make "Box")
+let pbox = Projection.make (Constant.make2 forcing_module (Label.make "box")) false
+
+let fBTYPE = Constant.make3 forcing_module DirPath.empty (Label.make "BTYPEᶠ")
+let flift = Constant.make3 forcing_module DirPath.empty (Label.make "lift")
 
 (** Optimization of cuts *)
 
@@ -116,7 +121,7 @@ let dummy = mkProp
 let last_condition fctx =
   let rec last fctx = match fctx with
   | [] -> 1
-  | Variable :: fctx -> 2 + last fctx
+  | Variable :: fctx -> 1 + last fctx
   | Lift :: fctx -> 2
   in
   last fctx.context
@@ -126,7 +131,7 @@ let gather_morphisms n fctx =
     if n = 0 then []
     else match fctx with
     | [] -> []
-    | Variable :: fctx -> gather (i + 2) (n - 1) fctx
+    | Variable :: fctx -> gather (i + 1) (n - 1) fctx
     | Lift :: fctx -> i :: gather (i + 2) n fctx
   in
   gather 1 n fctx.context
@@ -144,7 +149,7 @@ let get_var_shift n fctx =
     if n = 0 then 0
     else match fctx with
     | [] -> n
-    | Variable :: fctx -> 2 + get (n - 1) fctx
+    | Variable :: fctx -> 1 + get (n - 1) fctx
     | Lift :: fctx -> 2 + get n fctx
   in
   get n fctx.context
@@ -194,6 +199,10 @@ let fresh_universe = (); fun env fctx sigma ->
   let (sigma, s) = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
   (sigma, mkSort s)
 
+let with_cat c = fun env fctx sigma ->
+  let cat = fctx.category in
+  (sigma, mkApp (c, [| cat.cat_obj; cat.cat_hom |]))
+
 (** Macros *)
 
 let liftn_named_decl n k (na, b, t) = (na, Option.map (fun c -> Vars.liftn n k c) b, Vars.liftn n k t)
@@ -201,7 +210,7 @@ let liftn_named_context n k ctx =
   let len = List.length ctx in
   List.mapi (fun i d -> liftn_named_decl n (k + len - i) d) ctx
 
-(** Given an inhabitant of CType build a Type *)
+(** Given an inhabitant of Typeᶠ builds a Type *)
 let projfType c env fctx sigma =
   let c = mkOptProj c in
   let last = mkRel (last_condition fctx) in
@@ -210,9 +219,6 @@ let projfType c env fctx sigma =
 (** Inverse *)
 let mkfType lam mon env fctx sigma =
   let (sigma, pc) = Evd.fresh_constructor_instance env sigma ctype in
-  let (ext0, fctx0) = extend fctx in
-  let self = it_mkProd_or_LetIn (mkOptApp (Vars.lift 2 lam, [| mkRel 2; mkRel 1 |])) ext0 in
-  let mon = mkLambda (Anonymous, self, mon) in
   let tpe = mkApp (mkConstructU pc, [| fctx.category.cat_obj; fctx.category.cat_hom; mkRel (last_condition fctx); lam; mon |]) in
   (sigma, tpe)
 
@@ -236,35 +242,22 @@ let translate_var n = fun env fctx sigma ->
   let p = mkRel (last_condition fctx) in
   let f = morphism_var n fctx in
   let m = get_var_shift n fctx in
-  (sigma, mkApp (mkRel m, [| p; f |]))
-
-let translate_pvar n = fun env fctx sigma ->
-  let p = mkRel (last_condition fctx) in
-  let f = morphism_var n fctx in
-  let m = get_var_shift n fctx - 1 in
-  (sigma, mkApp (mkRel m, [| p; f |]))
+  (sigma, mkApp (mkRel m, [| |]))
 
 let mkHole = fun env fctx sigma ->
   let (sigma, (typ, _)) = Evarutil.new_type_evar env sigma Evd.univ_flexible_alg in
   let (sigma, c) = Evarutil.new_evar env sigma typ in
   (sigma, c)
 
-(** Given a type A, builds Rel 1 ||- [[A]] *)
-let mkParamType self t =
-  get_category >>= fun cat ->
-  fresh_constant frealizes >>= fun frealizes ->
-  box (self.otranslate t) >>= fun t_ ->
-  box (self.rtranslate t) >>= fun tr_ ->
-  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun last ->
-  let ans = mkApp (mkConstU frealizes, [| cat.cat_obj; cat.cat_hom; mkRel last; t_; tr_ |]) in
-  let ans = Vars.lift 1 ans in
-  return (mkApp (ans, [| mkRel 1 |]))
-
 let in_var self na t f =
-  box_type (self.otranslate t) >>= fun t_ ->
-  mkParamType self t >>= fun tr_ env fctx sigma ->
+  self.rtranslate t >>= fun t_ ->
+  fresh_constant fBox >>= fun pc ->
+  with_cat (mkConstU pc) >>= fun fBox ->
+  fun env fctx sigma ->
+  let n = last_condition fctx in
+  let t_ = mkApp (fBox, [| mkRel n; t_ |]) in
   let fctx = add_variable fctx in
-  let ctx = [(rel_name na, None, tr_); (na, None, t_)] in
+  let ctx = [(na, None, t_)] in
   let env = Environ.push_rel_context ctx env in
   f ctx env fctx sigma
 
@@ -275,7 +268,7 @@ let type_mon =
   fresh_constant ftypemon >>= fun ftypemon ->
   (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun last ->
   let ans = mkApp (mkConstU ftypemon, [| cat.cat_obj; cat.cat_hom; mkRel last |]) in
-  return (mkApp (Vars.lift 1 ans, [| mkRel 1 |]))
+  return ans
 
 let prod_mon self na t u =
   get_category >>= fun cat ->
@@ -283,17 +276,17 @@ let prod_mon self na t u =
   (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun last ->
   let ans = mkApp (mkConstU fprodmon, [| cat.cat_obj; cat.cat_hom; mkRel last |]) in
   box (self.otranslate t) >>= fun t_ ->
-  box (self.rtranslate t) >>= fun tr_ ->
+  box (self.otranslate t) >>= fun tr_ ->
   in_extend begin fun ext ->
     in_var self na t begin fun var ->
       self.otranslate u >>= fun u_ ->
-      in_extend (fun ext -> self.rtranslate u >>= fun u_ -> return (it_mkLambda_or_LetIn u_ ext)) >>= fun ur_ ->
+      in_extend (fun ext -> self.otranslate u >>= fun u_ -> return (it_mkLambda_or_LetIn u_ ext)) >>= fun ur_ ->
       let u_ = it_mkLambda_or_LetIn u_ (var @ ext) in
       let ur_ = it_mkLambda_or_LetIn ur_ (var @ ext) in
       return (u_, ur_)
   end end >>= fun (u_, ur_) ->
   let ans = mkApp (ans, [| t_; tr_; u_; ur_ |]) in
-  return (mkApp (Vars.lift 1 ans, [| mkRel 1 |]))
+  return ans
 
 let dummy_mon = mkProp
 
@@ -303,7 +296,12 @@ let rec otranslate c =
 let self = { otranslate = otranslate; rtranslate = rtranslate } in
 match kind_of_term c with
 | Rel n ->
-  translate_var n
+  fun env fctx sigma ->
+    let p = mkRel (last_condition fctx) in
+    let f = morphism_var n fctx in
+    let m = get_var_shift n fctx in
+    let m = mkProj (pbox, mkRel m) in
+    (sigma, mkApp (m, [| p; f |]))
 
 | Sort s ->
   in_extend begin fun ext0 ->
@@ -316,10 +314,7 @@ match kind_of_term c with
   mkfType lam mon
 
 | Cast (c, k, t) ->
-  otranslate c >>= fun c_ ->
-  otranslate_type t >>= fun t_ ->
-  let ans = mkCast (c_, k, t_) in
-  return ans
+  assert false
 
 | Prod (na, t, u) ->
   in_extend begin fun ext0 ->
@@ -343,8 +338,7 @@ match kind_of_term c with
   otranslate t >>= fun t_ ->
   let map u =
     otranslate_boxed u >>= fun u_ ->
-    rtranslate u >>= fun ur_ ->
-    return [u_; ur_]
+    return [u_]
   in
   mmap map (Array.to_list args) >>= fun args_ ->
   let app = applist (t_, List.concat args_) in
@@ -382,20 +376,13 @@ and rtranslate t =
 let self = { otranslate = otranslate; rtranslate = rtranslate } in
 match kind_of_term t with
 | Rel n ->
-  fun env fctx sigma ->
-    let f = morphism_var n fctx in
-    let n = get_var_shift n fctx - 1 in
-    let last = last_condition fctx in
-    (sigma, mkApp (mkRel n, [| mkRel last; f; mkRel last; refl fctx.category (mkRel last) |]))
+  translate_var n
 
 | Sort s ->
-  in_extend begin fun ext ->
-    fresh_universe >>= fun u ->
-    otranslate_type (mkSort s) >>= fun uT ->
-    let refl = Coqlib.gen_constant "" ["Init"; "Logic"] "eq_refl" in
-    let refl = mkApp (refl, [| u; uT |]) in
-    return (it_mkLambda_or_LetIn refl ext)
-  end
+  fresh_constant fBTYPE >>= fun fBTYPE ->
+  with_cat (mkConstU fBTYPE) >>= fun fBTYPE ->
+  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
+  return (mkApp (fBTYPE, [| mkRel n |]))
 
 | Cast (c, k, t) ->
   mkHole
