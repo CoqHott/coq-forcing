@@ -66,7 +66,10 @@ let fprodmon = Constant.make3 forcing_module DirPath.empty (Label.make "Prodᶿ"
 let fBox = Constant.make3 forcing_module DirPath.empty (Label.make "Box")
 let pbox = Projection.make (Constant.make2 forcing_module (Label.make "box")) false
 
+let fTYPE = Constant.make3 forcing_module DirPath.empty (Label.make "TYPEᶠ")
 let fBTYPE = Constant.make3 forcing_module DirPath.empty (Label.make "BTYPEᶠ")
+let fARROW = Constant.make3 forcing_module DirPath.empty (Label.make "Arrowᶠ")
+let fBARROW = Constant.make3 forcing_module DirPath.empty (Label.make "BArrowᶠ")
 let flift = Constant.make3 forcing_module DirPath.empty (Label.make "lift")
 
 (** Optimization of cuts *)
@@ -297,18 +300,23 @@ match kind_of_term c with
     let m = mkProj (pbox, mkRel m) in
     (sigma, mkApp (m, [| p; f |]))
 
-| Sort s ->
-  in_extend begin fun ext0 ->
-    get_category >>= fun cat ->
-    fresh_inductive cType >>= fun pi ->
-    let tpe = mkApp (mkIndU pi, [| cat.cat_obj; cat.cat_hom; mkRel 2 |]) in
-    return (it_mkLambda_or_LetIn tpe ext0)
-  end >>= fun lam ->
-  type_mon >>= fun mon ->
-  mkfType lam mon
+| Sort _ ->
+  fresh_constant fTYPE >>= fun c_ ->
+  with_cat (mkConstU c_) >>= fun c_ ->
+  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
+  return (mkApp (c_, [| mkRel n |]))
 
 | Cast (c, k, t) ->
   assert false
+
+| Prod (na, t, u) when Vars.noccurn 1 u ->
+  fresh_constant fARROW >>= fun c_ ->
+  with_cat (mkConstU c_) >>= fun c_ ->
+  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
+  let ans = mkApp (c_, [| mkRel n |]) in
+  rtranslate t >>= fun t_ ->
+  rtranslate (Vars.subst1 dummy u) >>= fun u_ ->
+  return (mkApp (ans, [| t_; u_ |]))
 
 | Prod (na, t, u) ->
   in_extend begin fun ext0 ->
@@ -391,6 +399,15 @@ match kind_of_term t with
 
 | Cast (c, k, t) ->
   mkHole
+
+| Prod (na, t, u) when Vars.noccurn 1 u ->
+  fresh_constant fBARROW >>= fun c_ ->
+  with_cat (mkConstU c_) >>= fun c_ ->
+  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
+  let ans = mkApp (c_, [| mkRel n |]) in
+  rtranslate t >>= fun t_ ->
+  rtranslate (Vars.subst1 dummy u) >>= fun u_ ->
+  return (mkApp (ans, [| t_; u_ |]))
 
 | Prod (na, t, u) ->
   in_extend begin fun ext ->
