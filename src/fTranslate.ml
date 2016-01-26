@@ -238,12 +238,6 @@ let box_type t =
 let rel_type t =
   t >>= fun t_ -> return (mkOptMono t_)
 
-let translate_var n = fun env fctx sigma ->
-  let p = mkRel (last_condition fctx) in
-  let f = morphism_var n fctx in
-  let m = get_var_shift n fctx in
-  (sigma, mkApp (mkRel m, [| |]))
-
 let mkHole = fun env fctx sigma ->
   let (sigma, (typ, _)) = Evarutil.new_type_evar env sigma Evd.univ_flexible_alg in
   let (sigma, c) = Evarutil.new_evar env sigma typ in
@@ -376,7 +370,18 @@ and rtranslate t =
 let self = { otranslate = otranslate; rtranslate = rtranslate } in
 match kind_of_term t with
 | Rel n ->
-  translate_var n
+  fun env fctx sigma ->
+  let morph = gather_morphisms n fctx in
+  let p = mkRel (last_condition fctx) in
+  let m = get_var_shift n fctx in
+  (** Short path: do not lift if not necessary *)
+  let (sigma, ans) = match morph with
+  | [] -> (sigma, mkRel m)
+  | _ ->
+    let (sigma, pc) = Evd.fresh_constant_instance env sigma flift in
+    (sigma, mkProp) (** FIXME *)
+  in
+  (sigma, ans)
 
 | Sort s ->
   fresh_constant fBTYPE >>= fun fBTYPE ->

@@ -15,10 +15,10 @@ Definition eq := fun (A : Type) (x y : A) => forall (P : A -> Prop), P x -> P y.
 
 Open Scope forcing_scope.
 
-Forcing Translate foo using Obj Hom.
-Forcing Translate quz using Obj Hom.
+(* Forcing Translate foo using Obj Hom. *)
+Fail Forcing Translate quz using Obj Hom.
 
-Fail Forcing Translate bar using Obj Hom.
+(* Fail Forcing Translate bar using Obj Hom. *)
 
 
 (* Fail Forcing Translate qux using Obj Hom. *)
