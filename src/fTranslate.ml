@@ -70,6 +70,8 @@ let fTYPE = Constant.make3 forcing_module DirPath.empty (Label.make "TYPEᶠ")
 let fBTYPE = Constant.make3 forcing_module DirPath.empty (Label.make "BTYPEᶠ")
 let fARROW = Constant.make3 forcing_module DirPath.empty (Label.make "Arrowᶠ")
 let fBARROW = Constant.make3 forcing_module DirPath.empty (Label.make "BArrowᶠ")
+let fPROD = Constant.make3 forcing_module DirPath.empty (Label.make "Prodᶠ")
+let fBPROD = Constant.make3 forcing_module DirPath.empty (Label.make "BProdᶠ")
 let flift = Constant.make3 forcing_module DirPath.empty (Label.make "lift")
 
 (** Optimization of cuts *)
@@ -387,7 +389,9 @@ match kind_of_term t with
   | [] -> (sigma, mkRel m)
   | _ ->
     let (sigma, pc) = Evd.fresh_constant_instance env sigma flift in
-    (sigma, mkProp) (** FIXME *)
+    let (sigma, flift) = with_cat (mkConstU pc) env fctx sigma in
+    let last = last_condition fctx in
+    (sigma, mkApp (flift, [| mkRel last |])) (** FIXME *)
   in
   (sigma, ans)
 
@@ -410,13 +414,13 @@ match kind_of_term t with
   return (mkApp (ans, [| t_; u_ |]))
 
 | Prod (na, t, u) ->
-  in_extend begin fun ext ->
-    fresh_universe >>= fun u ->
-    otranslate_type (mkProd (na, t, u)) >>= fun uT ->
-    let refl = Coqlib.gen_constant "" ["Init"; "Logic"] "eq_refl" in
-    let refl = mkApp (refl, [| u; uT |]) in
-    return (it_mkLambda_or_LetIn refl ext)
-  end
+  fresh_constant fBPROD >>= fun c_ ->
+  with_cat (mkConstU c_) >>= fun c_ ->
+  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
+  let ans = mkApp (c_, [| mkRel n |]) in
+  rtranslate t >>= fun t_ ->
+  rtranslate u >>= fun u_ ->
+  return (mkApp (ans, [| t_; u_ |]))
 
 | Lambda (na, t, u) ->
   mkHole
