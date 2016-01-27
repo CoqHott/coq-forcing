@@ -321,16 +321,16 @@ match kind_of_term c with
   return (mkApp (ans, [| t_; u_ |]))
 
 | Prod (na, t, u) ->
-  in_extend begin fun ext0 ->
-    in_var self na t begin fun var ->
-      otranslate u >>= fun u_ ->
-      projfType u_ >>= fun u_ ->
-      return (it_mkProd_or_LetIn u_ var)
-    end >>= fun ans ->
-    return (it_mkLambda_or_LetIn ans ext0)
-  end >>= fun lam ->
-  prod_mon self na t u >>= fun mon ->
-  mkfType lam mon
+  fresh_constant fPROD >>= fun c_ ->
+  with_cat (mkConstU c_) >>= fun c_ ->
+  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
+  let ans = mkApp (c_, [| mkRel n |]) in
+  rtranslate t >>= fun t_ ->
+  in_var self na t begin fun var ->
+    rtranslate u >>= fun u_ ->
+    return (it_mkLambda_or_LetIn u_ var)
+  end >>= fun u_ ->
+  return (mkApp (ans, [| t_; u_ |]))
 
 | Lambda (na, t, u) ->
   in_var self na t begin fun var ->
@@ -419,7 +419,10 @@ match kind_of_term t with
   (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
   let ans = mkApp (c_, [| mkRel n |]) in
   rtranslate t >>= fun t_ ->
-  rtranslate u >>= fun u_ ->
+  in_var self na t begin fun var ->
+    rtranslate u >>= fun u_ ->
+    return (it_mkLambda_or_LetIn u_ var)
+  end >>= fun u_ ->
   return (mkApp (ans, [| t_; u_ |]))
 
 | Lambda (na, t, u) ->
