@@ -35,7 +35,7 @@ Definition realizes p
     mono _ (A p0 α)
       (fun p1 (α0 : p0 ≤ p1) => cast (Aᴿ p0 α p1 α0) (x p1 (α ∘ α0))).
 
-Record Box_ (p : Obj) (A : forall p0 (α : p ≤ p0), Typeᶠ p0) (Aᴿ : Typeᶿ A) := mkBox {
+Record Box_ (p : Obj) (A : forall p0 (α : p ≤ p0), Typeᶠ p0) (Aᴿ : Typeᶿ A) := mkBox_ {
   box : forall p0 (α : p ≤ p0), type _ (A p0 α) p0 #;
   mon : realizes p A Aᴿ box;
 }.
@@ -59,6 +59,8 @@ Defined.
 
 Definition Box (p : Obj) (A : BTypeᶠ p) :=
   Box_ p (box _ _ _ A) (fun p0 (α : p ≤ p0) p1 (α0 : p0 ≤ p1) => mon _ _ _ A p0 α p0 # p1 α0).
+
+Definition mkBox (p : Obj) (A : BTypeᶠ p) t tr : Box p A := mkBox_ p _ _ t tr.
 
 Definition lift {p : Obj} {A} (x : Box p A) {p0} (α : p ≤ p0) : Box p0 (lift_ p _ _ A p0 α) := lift_ p _ _ x p0 α.
 

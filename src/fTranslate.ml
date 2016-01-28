@@ -65,6 +65,7 @@ let fprodmon = Constant.make3 forcing_module DirPath.empty (Label.make "Prodᶿ"
 
 let fBox = Constant.make3 forcing_module DirPath.empty (Label.make "Box")
 let pbox = Projection.make (Constant.make2 forcing_module (Label.make "box")) false
+let fmkBox = Constant.make3 forcing_module DirPath.empty (Label.make "mkBox")
 
 let fTYPE = Constant.make3 forcing_module DirPath.empty (Label.make "TYPEᶠ")
 let fBTYPE = Constant.make3 forcing_module DirPath.empty (Label.make "BTYPEᶠ")
@@ -200,6 +201,9 @@ let fresh_inductive ind = (); fun env fctx sigma ->
 let fresh_constant c = (); fun env fctx sigma ->
   Evd.fresh_constant_instance env sigma c
 
+let fresh_constructor c = (); fun env fctx sigma ->
+  Evd.fresh_constructor_instance env sigma c
+
 let fresh_universe = (); fun env fctx sigma ->
   let (sigma, s) = Evd.new_sort_variable Evd.univ_flexible_alg sigma in
   (sigma, mkSort s)
@@ -207,6 +211,11 @@ let fresh_universe = (); fun env fctx sigma ->
 let with_cat c = fun env fctx sigma ->
   let cat = fctx.category in
   (sigma, mkApp (c, [| cat.cat_obj; cat.cat_hom |]))
+
+let with_lcat c = fun env fctx sigma ->
+  let cat = fctx.category in
+  let n = last_condition fctx in
+  (sigma, mkApp (c, [| cat.cat_obj; cat.cat_hom; mkRel n |]))
 
 (** Macros *)
 
@@ -227,34 +236,16 @@ let mkfType lam mon env fctx sigma =
   let tpe = mkApp (mkConstructU pc, [| fctx.category.cat_obj; fctx.category.cat_hom; mkRel (last_condition fctx); lam; mon |]) in
   (sigma, tpe)
 
-let box t =
-  in_extend begin fun ext ->
-    t >>= fun t_ ->
-    return (it_mkLambda_or_LetIn t_ ext)
-  end
-
-let box_type t =
-  in_extend begin fun ext ->
-    t >>= fun t_ ->
-    projfType t_ >>= fun t_ ->
-    return (it_mkProd_or_LetIn t_ ext)
-  end
-
-let rel_type t =
-  t >>= fun t_ -> return (mkOptMono t_)
-
 let mkHole = fun env fctx sigma ->
   let (sigma, (typ, _)) = Evarutil.new_type_evar env sigma Evd.univ_flexible_alg in
   let (sigma, c) = Evarutil.new_evar env sigma typ in
   (sigma, c)
 
-let in_var self na t f =
-  self.rtranslate t >>= fun t_ ->
+let in_var na t_ f =
   fresh_constant fBox >>= fun pc ->
-  with_cat (mkConstU pc) >>= fun fBox ->
+  with_lcat (mkConstU pc) >>= fun fBox ->
   fun env fctx sigma ->
-  let n = last_condition fctx in
-  let t_ = mkApp (fBox, [| mkRel n; t_ |]) in
+  let t_ = mkApp (fBox, [| t_ |]) in
   let fctx = add_variable fctx in
   let ctx = [(na, None, t_)] in
   let env = Environ.push_rel_context ctx env in
@@ -262,171 +253,70 @@ let in_var self na t f =
 
 (** Parametricity conditions. Rel1 is bound to a boxed term of the right type *)
 
-let type_mon =
-  get_category >>= fun cat ->
-  fresh_constant ftypemon >>= fun ftypemon ->
-  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun last ->
-  let ans = mkApp (mkConstU ftypemon, [| cat.cat_obj; cat.cat_hom; mkRel last |]) in
-  return ans
-
-let prod_mon self na t u =
-  get_category >>= fun cat ->
-  fresh_constant fprodmon >>= fun fprodmon ->
-  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun last ->
-  let ans = mkApp (mkConstU fprodmon, [| cat.cat_obj; cat.cat_hom; mkRel last |]) in
-  box (self.otranslate t) >>= fun t_ ->
-  box (self.otranslate t) >>= fun tr_ ->
-  in_extend begin fun ext ->
-    in_var self na t begin fun var ->
-      self.otranslate u >>= fun u_ ->
-      in_extend (fun ext -> self.otranslate u >>= fun u_ -> return (it_mkLambda_or_LetIn u_ ext)) >>= fun ur_ ->
-      let u_ = it_mkLambda_or_LetIn u_ (var @ ext) in
-      let ur_ = it_mkLambda_or_LetIn ur_ (var @ ext) in
-      return (u_, ur_)
-  end end >>= fun (u_, ur_) ->
-  let ans = mkApp (ans, [| t_; tr_; u_; ur_ |]) in
-  return ans
-
 let dummy_mon = mkProp
 
 (** Forcing translation core *)
 
-let rec otranslate c =
-let self = { otranslate = otranslate; rtranslate = rtranslate } in
-match kind_of_term c with
-| Rel n ->
-  fun env fctx sigma ->
-    let p = mkRel (last_condition fctx) in
-    let f = morphism_var n fctx in
-    let m = get_var_shift n fctx in
-    let m = mkProj (pbox, mkRel m) in
-    (sigma, mkApp (m, [| p; f |]))
-
-| Sort _ ->
-  fresh_constant fTYPE >>= fun c_ ->
-  with_cat (mkConstU c_) >>= fun c_ ->
+let debox c =
   (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
-  return (mkApp (c_, [| mkRel n |]))
+  get_category >>= fun cat ->
+  let ans = mkProj (pbox, c) in
+  let ans = mkApp (ans, [| mkRel n; refl cat (mkRel n) |]) in
+  return ans
 
-| Cast (c, k, t) ->
-  assert false
-
-| Prod (na, t, u) when Vars.noccurn 1 u ->
-  fresh_constant fARROW >>= fun c_ ->
-  with_cat (mkConstU c_) >>= fun c_ ->
-  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
-  let ans = mkApp (c_, [| mkRel n |]) in
-  rtranslate t >>= fun t_ ->
-  rtranslate (Vars.subst1 dummy u) >>= fun u_ ->
-  return (mkApp (ans, [| t_; u_ |]))
-
-| Prod (na, t, u) ->
-  fresh_constant fPROD >>= fun c_ ->
-  with_cat (mkConstU c_) >>= fun c_ ->
-  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
-  let ans = mkApp (c_, [| mkRel n |]) in
-  rtranslate t >>= fun t_ ->
-  in_var self na t begin fun var ->
-    rtranslate u >>= fun u_ ->
-    return (it_mkLambda_or_LetIn u_ var)
-  end >>= fun u_ ->
-  return (mkApp (ans, [| t_; u_ |]))
-
-| Lambda (na, t, u) ->
-  in_var self na t begin fun var ->
-    otranslate u >>= fun u_ ->
-    return (it_mkLambda_or_LetIn u_ var)
-  end
-
-| App (t, args) ->
-  otranslate t >>= fun t_ ->
-  let map u =
-    otranslate_boxed u >>= fun u_ ->
-    return [u_]
-  in
-  mmap map (Array.to_list args) >>= fun args_ ->
-  let app = applist (t_, List.concat args_) in
-  return app
-
-| LetIn (na, c, t, u) -> assert false
-| Var id -> assert false
-| Const (p, u) -> assert false
-| Ind (i, u) -> assert false
-| Construct (c, u) -> assert false
-| Case (ci, r, c, p) -> assert false
-| Fix f -> assert false
-| CoFix f -> assert false
-| Proj (p, c) -> assert false
-| Meta _ -> assert false
-| Evar _ -> assert false
-
-and otranslate_type t env fctx sigma =
-  let (sigma, t_) = otranslate t env fctx sigma in
-  projfType t_ env fctx sigma
-
-and otranslate_boxed t env fctx sigma =
-  let (ext, ufctx) = extend fctx in
-  let (sigma, t_) = otranslate t env ufctx sigma in
-  let t_ = it_mkLambda_or_LetIn t_ ext in
-  (sigma, t_)
-
-and otranslate_boxed_type t env fctx sigma =
-  let (ext, ufctx) = extend fctx in
-  let (sigma, t_) = otranslate_type t env ufctx sigma in
-  let t_ = it_mkProd_or_LetIn t_ ext in
-  (sigma, t_)
-
-and rtranslate t =
-let self = { otranslate = otranslate; rtranslate = rtranslate } in
-match kind_of_term t with
+let rec rtranslate t = match kind_of_term t with
 | Rel n ->
   fun env fctx sigma ->
   let morph = gather_morphisms n fctx in
-  let p = mkRel (last_condition fctx) in
   let m = get_var_shift n fctx in
   (** Short path: do not lift if not necessary *)
   let (sigma, ans) = match morph with
   | [] -> (sigma, mkRel m)
   | _ ->
     let (sigma, pc) = Evd.fresh_constant_instance env sigma flift in
-    let (sigma, flift) = with_cat (mkConstU pc) env fctx sigma in
-    let last = last_condition fctx in
-    (sigma, mkApp (flift, [| mkRel last |])) (** FIXME *)
+    let (sigma, flift) = with_lcat (mkConstU pc) env fctx sigma in
+    (sigma, mkApp (flift, [| mkRel m |])) (** FIXME *)
   in
   (sigma, ans)
 
 | Sort s ->
   fresh_constant fBTYPE >>= fun fBTYPE ->
-  with_cat (mkConstU fBTYPE) >>= fun fBTYPE ->
-  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
-  return (mkApp (fBTYPE, [| mkRel n |]))
+  with_lcat (mkConstU fBTYPE)
 
 | Cast (c, k, t) ->
   mkHole
 
 | Prod (na, t, u) when Vars.noccurn 1 u ->
   fresh_constant fBARROW >>= fun c_ ->
-  with_cat (mkConstU c_) >>= fun c_ ->
-  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
-  let ans = mkApp (c_, [| mkRel n |]) in
+  with_lcat (mkConstU c_) >>= fun ans ->
   rtranslate t >>= fun t_ ->
   rtranslate (Vars.subst1 dummy u) >>= fun u_ ->
   return (mkApp (ans, [| t_; u_ |]))
 
 | Prod (na, t, u) ->
   fresh_constant fBPROD >>= fun c_ ->
-  with_cat (mkConstU c_) >>= fun c_ ->
-  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
-  let ans = mkApp (c_, [| mkRel n |]) in
+  with_lcat (mkConstU c_) >>= fun ans ->
   rtranslate t >>= fun t_ ->
-  in_var self na t begin fun var ->
+  in_var na t_ begin fun var ->
     rtranslate u >>= fun u_ ->
     return (it_mkLambda_or_LetIn u_ var)
   end >>= fun u_ ->
   return (mkApp (ans, [| t_; u_ |]))
 
 | Lambda (na, t, u) ->
-  mkHole
+  fresh_constant fmkBox >>= fun box_ ->
+  with_lcat (mkConstU box_) >>= fun box_ ->
+  rtranslate t >>= fun t_ ->
+  in_var na t_ begin fun var ->
+    rtranslate u >>= fun u_ ->
+    return (var, u_)
+  end >>= fun (var, u_) ->
+  in_extend begin fun ext ->
+    debox (Vars.lift 2 u_) >>= fun u_ ->
+    return (it_mkLambda_or_LetIn u_ ext)
+  end >>= fun f_ ->
+  mkHole >>= fun hole ->
+  return (mkApp (box_, [| hole; f_ ; u_ |]))
 
 | App (t, args) ->
   mkHole
@@ -442,6 +332,14 @@ match kind_of_term t with
 | Proj (p, c) -> assert false
 | Meta _ -> assert false
 | Evar _ -> assert false
+
+let otranslate c =
+  rtranslate c >>= fun c_ ->
+  debox c_
+
+let otranslate_type t env fctx sigma =
+  let (sigma, t_) = otranslate t env fctx sigma in
+  projfType t_ env fctx sigma
 
 let empty translator cat lift env =
   let ctx = rel_context env in
