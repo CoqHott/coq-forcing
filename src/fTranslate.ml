@@ -264,6 +264,14 @@ let debox c =
   let ans = mkApp (ans, [| mkRel n; refl cat (mkRel n) |]) in
   return ans
 
+let box_abs na t_ (var, u_) =
+  fresh_constant fmkBox >>= fun fmkBox ->
+  with_lcat (mkConstU fmkBox) >>= fun fmkBox ->
+  let term = it_mkLambda_or_LetIn u_ var in
+  let real = it_mkLambda_or_LetIn u_ var in
+  let ans = mkApp (fmkBox, [| term; real |]) in
+  return ans
+
 let rec rtranslate t = match kind_of_term t with
 | Rel n ->
   fun env fctx sigma ->
@@ -299,8 +307,9 @@ let rec rtranslate t = match kind_of_term t with
   rtranslate t >>= fun t_ ->
   in_var na t_ begin fun var ->
     rtranslate u >>= fun u_ ->
-    return (it_mkLambda_or_LetIn u_ var)
-  end >>= fun u_ ->
+    return (var, u_)
+  end >>= fun (var, u_) ->
+  box_abs na t_ (var, u_) >>= fun u_ ->
   return (mkApp (ans, [| t_; u_ |]))
 
 | Lambda (na, t, u) ->
