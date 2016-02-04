@@ -257,12 +257,15 @@ let dummy_mon = mkProp
 
 (** Forcing translation core *)
 
-let debox c =
-  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
+let debox_with c last =
   get_category >>= fun cat ->
   let ans = mkProj (pbox, c) in
-  let ans = mkApp (ans, [| mkRel n; refl cat (mkRel n) |]) in
+  let ans = mkApp (ans, [| last; refl cat last |]) in
   return ans
+
+let debox c =
+  (fun env fctx sigma -> (sigma, last_condition fctx)) >>= fun n ->
+  debox_with c (mkRel n)
 
 let box_abs na t_ (ext, var, u_) =
   fresh_constant fmkBox >>= fun fmkBox ->
@@ -272,7 +275,8 @@ let box_abs na t_ (ext, var, u_) =
   fresh_constant fBTYPE >>= fun fBTYPE ->
   with_lcat (mkConstU fBTYPE) >>= fun fBTYPE ->
   let typ = mkApp (fBARROW, [| t_; fBTYPE |]) in
-  let term = it_mkLambda_or_LetIn u_ (var @ ext) in
+  debox_with u_ (mkRel 3) >>= fun term ->
+  let term = it_mkLambda_or_LetIn term (var @ ext) in
   let real = it_mkLambda_or_LetIn u_ (var @ ext) in
   let ans = mkApp (fmkBox, [| typ; term; real |]) in
   return ans
