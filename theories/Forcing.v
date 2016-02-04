@@ -80,16 +80,17 @@ simple refine ({| box := fun p0 (α : p ≤ p0) => _; |}).
 + refine (fun p0 (α : p ≤ p0) (p1 : Obj) (α0 : p0 ≤ p1) (p2 : Obj) (α1 : p1 ≤ p2) => eq_refl).
 Defined.
 
-Definition Prodᶠ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p))) : Typeᶠ p.
-Proof.
-simple refine ({| type := _; mono := _ |}).
-+ simple refine (fun p0 (α : p ≤ p0) => _).
-  simple refine (forall x : Box p0 (lift_ p _ _ A p0 α), type _ _ p0 #).
-  simple refine ((box _ _ _ B p0 α) x).
-+ simple refine (fun f => forall x : Box p A, _).
-  simple refine (mono _ (box _ _ _ B p # x) (fun p0 (α : p ≤ p0) => cast _ (f p0 α (lift x α)))).
-  simple refine (mon _ _ _ B p # x p # p0 α).
-Defined.
+Definition Prodᵀ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p))) :=
+  fun p0 (α : p ≤ p0) => forall x : Box p0 (lift_ p _ _ A p0 α), type _ ((box _ _ _ B p0 α) x) p0 #.
+
+Definition Prodᶿ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p)))
+  (f : forall p0 (α : p ≤ p0), Prodᵀ p A B p0 α) :=
+  forall x : Box p A, mono _ (box _ _ _ B p # x) (fun p0 (α : p ≤ p0) => cast (mon _ _ _ B p # x p # p0 α) (f p0 α (lift x α))).
+
+Definition Prodᶠ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p))) : Typeᶠ p := {|
+  type := Prodᵀ p A B;
+  mono := Prodᶿ p A B
+|}.
 
 Definition BProdᶠ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p))) : BTypeᶠ p.
 Proof.
