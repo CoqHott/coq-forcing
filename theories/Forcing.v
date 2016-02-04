@@ -97,6 +97,25 @@ simple refine ({| box := fun p0 (α : p ≤ p0) => _; |}).
 + refine (fun p0 (α : p ≤ p0) (p1 : Obj) (α0 : p0 ≤ p1) (p2 : Obj) (α1 : p1 ≤ p2) => eq_refl).
 Defined.
 
+Definition mkAppType (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p))) (x : Box p A) : BTypeᶠ p.
+Proof.
+simple refine (
+{| box := _; mon := _ |}
+).
++ refine (fun p0 (α : p ≤ p0) => (box _ _ _ B p0 α) (lift x α)).
++ refine (fun p0 (α : p ≤ p0) => mon _ _ _ B p0 α (lift x α)).
+Defined.
+
+Definition Lamᶠ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p)))
+  (f : forall p0 (α : p ≤ p0) (x : Box p0 (lift_ _ _ _ A _ α)), Box p0 (mkAppType p0 (lift_ _ _ _ A _ α) (lift B α) x)) :
+  Box p (BProdᶠ p A B).
+Proof.
+simple refine ({| box := _; mon := _ |}).
++ refine (fun p0 (α : p ≤ p0) x => box _ _ _ (f p0 α x) p0 #).
++ refine (fun p0 (α : p ≤ p0) x => _).
+  pose (f' := mon _ _ _ (f p0 α x) p0 #).
+Abort.
+
 End Forcing.
 
 Arguments box {_ _ _ _ _} _ _ _.
