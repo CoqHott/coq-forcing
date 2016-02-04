@@ -3,6 +3,7 @@
 ## Description
 
 This is a plugin for Coq v8.5 that implements the call-by-name forcing translation.
+The translation is described in this [draft](https://www.xn--pdrot-bsa.fr/articles/draft-forcing.pdf).
 
 ## Install
 
