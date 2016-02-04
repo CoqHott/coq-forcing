@@ -264,12 +264,17 @@ let debox c =
   let ans = mkApp (ans, [| mkRel n; refl cat (mkRel n) |]) in
   return ans
 
-let box_abs na t_ (var, u_) =
+let box_abs na t_ (ext, var, u_) =
   fresh_constant fmkBox >>= fun fmkBox ->
   with_lcat (mkConstU fmkBox) >>= fun fmkBox ->
-  let term = it_mkLambda_or_LetIn u_ var in
-  let real = it_mkLambda_or_LetIn u_ var in
-  let ans = mkApp (fmkBox, [| term; real |]) in
+  fresh_constant fBARROW >>= fun fBARROW ->
+  with_lcat (mkConstU fBARROW) >>= fun fBARROW ->
+  fresh_constant fBTYPE >>= fun fBTYPE ->
+  with_lcat (mkConstU fBTYPE) >>= fun fBTYPE ->
+  let typ = mkApp (fBARROW, [| t_; fBTYPE |]) in
+  let term = it_mkLambda_or_LetIn u_ (var @ ext) in
+  let real = it_mkLambda_or_LetIn u_ (var @ ext) in
+  let ans = mkApp (fmkBox, [| typ; term; real |]) in
   return ans
 
 let rec rtranslate t = match kind_of_term t with
@@ -305,11 +310,12 @@ let rec rtranslate t = match kind_of_term t with
   fresh_constant fBPROD >>= fun c_ ->
   with_lcat (mkConstU c_) >>= fun ans ->
   rtranslate t >>= fun t_ ->
-  in_var na t_ begin fun var ->
+  in_extend begin fun ext ->
+  in_var na (Vars.lift 2 t_) begin fun var ->
     rtranslate u >>= fun u_ ->
-    return (var, u_)
-  end >>= fun (var, u_) ->
-  box_abs na t_ (var, u_) >>= fun u_ ->
+    return (ext, var, u_)
+  end end >>= fun (ext, var, u_) ->
+  box_abs na t_ (ext, var, u_) >>= fun u_ ->
   return (mkApp (ans, [| t_; u_ |]))
 
 | Lambda (na, t, u) ->

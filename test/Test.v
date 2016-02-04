@@ -15,7 +15,17 @@ Definition eq := fun (A : Type) (x y : A) => forall (P : A -> Prop), P x -> P y.
 
 Open Scope forcing_scope.
 
-Fail Forcing Translate foo using Obj Hom.
+Definition baz := forall A : Type, A.
+
+Fail Forcing Translate baz using Obj Hom.
+Check
+fun p : Obj =>
+@box _ _ _ _ _
+  (@BProdᶠ Obj Hom p (@BTYPEᶠ Obj Hom p)
+     (@mkBox Obj Hom p (BArrowᶠ p (@BTYPEᶠ Obj Hom p) (@BTYPEᶠ Obj Hom p))
+        (fun (p0 : Obj) (α : p ≤ p0) (A : @Box Obj Hom p0 (@BTYPEᶠ Obj Hom α)) => A)
+        (fun (p0 : Obj) (α : p ≤ p0) (A : @Box Obj Hom p0 (@BTYPEᶠ Obj Hom α)) => A))) p 
+  #.
 
 Forcing Translate quz using Obj Hom.
 
