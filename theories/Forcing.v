@@ -64,14 +64,14 @@ Definition mkBox (p : Obj) (A : BTypeᶠ p) t tr : Box p A := mkBox_ p _ _ t tr.
 
 Definition lift {p : Obj} {A} (x : Box p A) {p0} (α : p ≤ p0) : Box p0 (lift_ p _ _ A p0 α) := lift_ p _ _ x p0 α.
 
-Definition Arrowᶠ (p : Obj) (A : BTypeᶠ p) (B : BTypeᶠ p) : Typeᶠ p.
-Proof.
-simple refine ({| type := _; mono := _ |}).
-+ simple refine (fun p0 (α : p ≤ p0) => _).
-  simple refine (Box p0 (lift_ p _ _ A p0 α) -> type _ (box _ _ _ B p0 α) p0 #).
-+ simple refine (fun f => forall x : Box p A, _).
-  simple refine (mono _ (box _ _ _ B p #) (fun p0 (α : p ≤ p0) => cast (mon _ _ _ B p # p # p0 α) (f p0 α (lift x α)))).
-Defined.
+Definition Arrowᵀ (p : Obj) (A : BTypeᶠ p) (B : BTypeᶠ p) :=
+  fun p0 (α : p ≤ p0) => Box p0 (lift_ p _ _ A p0 α) -> type _ (box _ _ _ B p0 α) p0 #.
+
+Definition Arrowᶿ (p : Obj) (A : BTypeᶠ p) (B : BTypeᶠ p) (f : forall p0 (α : p ≤ p0), Arrowᵀ p A B p0 α) : Type :=
+  forall x : Box p A, mono _ (box _ _ _ B p #) (fun p0 (α : p ≤ p0) => cast (mon _ _ _ B p # p # p0 α) (f p0 α (lift x α))).
+
+Definition Arrowᶠ (p : Obj) (A : BTypeᶠ p) (B : BTypeᶠ p) : Typeᶠ p :=
+  {| type := Arrowᵀ p A B; mono := Arrowᶿ p A B; |}.
 
 Definition BArrowᶠ (p : Obj) (A : BTypeᶠ p) (B : BTypeᶠ p) : BTypeᶠ p.
 Proof.
@@ -84,13 +84,11 @@ Definition Prodᵀ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPE�
   fun p0 (α : p ≤ p0) => forall x : Box p0 (lift_ p _ _ A p0 α), type _ ((box _ _ _ B p0 α) x) p0 #.
 
 Definition Prodᶿ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p)))
-  (f : forall p0 (α : p ≤ p0), Prodᵀ p A B p0 α) :=
+  (f : forall p0 (α : p ≤ p0), Prodᵀ p A B p0 α) : Type :=
   forall x : Box p A, mono _ (box _ _ _ B p # x) (fun p0 (α : p ≤ p0) => cast (mon _ _ _ B p # x p # p0 α) (f p0 α (lift x α))).
 
-Definition Prodᶠ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p))) : Typeᶠ p := {|
-  type := Prodᵀ p A B;
-  mono := Prodᶿ p A B
-|}.
+Definition Prodᶠ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p))) : Typeᶠ p :=
+  {| type := Prodᵀ p A B; mono := Prodᶿ p A B; |}.
 
 Definition BProdᶠ (p : Obj) (A : BTypeᶠ p) (B : Box p (BArrowᶠ p A (BTYPEᶠ p))) : BTypeᶠ p.
 Proof.
