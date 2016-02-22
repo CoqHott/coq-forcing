@@ -1,9 +1,16 @@
-Require Forcing.
+(* Formalisation of Guarded Recursive Types using the cbn forcing plugin with the ordered set of natural numbers
+ as forcing conditions *)
 
-Inductive le : nat -> nat -> Type :=
-  | le_0 : forall n, 0 <= n
-  | le_n_S : forall m n:nat, n <= m -> S n <= S m
-where "n <= m" := (le n m) : nat_scope.
+Require Forcing.
+Require Eq.
+Require Import PeanoNat.
+Require Import FunctionalExtensionality.
+Require Import Coq.Logic.ProofIrrelevance.
+
+(*
+Set Universe Polymorphism.
+*)
+
 
 Definition Obj :Type := nat.
 Definition Hom : Obj -> Obj -> Type := fun n m => m <= n.
@@ -12,47 +19,73 @@ Notation "P ≤ Q" := (forall R, Hom Q R -> Hom P R) (at level 70).
 Notation "#" := (fun (R : Obj) (k : Hom _ R) => k).
 Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40).
 
-Axiom le_Sn_0 : forall n, 0 ≤ S n -> False.
-
-Definition le_S' m : S m ≤ m.
+Lemma Yle_to_le : forall n m, n ≤ m -> m <= n.
 Proof.
-  intros R k. 
-  induction k.
-  - apply le_0.
-  - apply le_n_S. exact IHk. 
+  intros n m H.
+  unfold Hom in H.
+  eapply H.
+  eapply le_n.
+Qed.
+
+Lemma le_to_Yle : forall n m, n <= m -> m ≤ n.
+Proof.
+unfold Hom.
+intros n m H R H'.
+refine (Nat.le_trans _ n _ _ _); tauto.
+Qed.
+
+
+Lemma Yle_Sn_0 : forall n, 0 ≤ S n -> False.
+Proof.
+  unfold Hom;
+  intros n H.
+  specialize (H (S n) (le_n (S n))).
+  inversion H.
+Qed.
+
+Definition Yle_S' m : S m ≤ m.
+Proof.
+  eapply le_to_Yle.
+  eapply le_S.
+  eapply le_n.
 Defined.
 
-Definition pointwise_paths_ {A} {P:A->Type} (f g:forall x:A, P x)
-  := forall x:A, f x = g x.
-
-Definition apD10_ {A} {B:A->Type} {f g : forall x, B x} (h: f = g) :pointwise_paths_ f g :=
-  match h with eq_refl => fun x => eq_refl end. 
-
-Axiom funext_ : forall A (B : A -> Type) (f g : forall a, B a), pointwise_paths_ f g -> f = g.
-
-Axiom nat_irr : forall m n (p q : m <= n), p = q.
-
-Definition nat_irrY m n (p q : m ≤ n): p = q.
+Definition Ynat_irr p q (α α' : p ≤ q): α = α'.
 Proof.
-  apply funext_. intro R. apply funext_. intro e.
-  apply nat_irr.
-Defined. 
+  unfold Hom in α,α'.
+  apply (functional_extensionality_dep α α').
+  intro r.
+  apply (functional_extensionality_dep (α r) (α' r)).
+  intro α''.
+  apply ProofIrrelevance.proof_irrelevance.
+Defined.
 
 Forcing Definition later : Type -> Type using Obj Hom.
 Proof.
   intros p T q f.
-  exact (match q as n return (p ≤ n -> Type) with
-         | 0 => fun _ => unit
-         | S q => fun (f:p ≤ S q) =>
-             T q (f ∘ (le_S' q)) q # 
-         end f).
+  destruct q.
+  exact unit.
+  exact (T q (f ∘ (Yle_S' q)) q #).
 Defined.
 
-Definition le_n_S_admitted m n : m ≤ n -> S m ≤ S n.
-Admitted. 
+Lemma Yle_n_S m n : m ≤ n -> S m ≤ S n.
+Proof.
+ intros H.
+ eapply le_to_Yle.
+ eapply le_n_S.
+ eapply Yle_to_le.
+ eapply H.
+Qed.
+ 
 
-Definition le_S_n_admitted m n : S m ≤ S n -> m ≤ n.
-Admitted. 
+Definition Yle_S_n m n : S m ≤ S n -> m ≤ n.
+Proof.
+ intros H.
+ eapply le_to_Yle.
+ eapply le_S_n.
+ eapply Yle_to_le.
+ eapply H.
+Qed.
 
 Forcing Definition Box : Type -> Type using Obj Hom.
 Proof.
@@ -67,45 +100,46 @@ Proof.
 
   induction p; intros T f q α; apply f; intros q0 α0.
   - destruct q0; try exact tt.
-    destruct (le_Sn_0 _ (α ∘ α0)).
+    destruct (Yle_Sn_0 _ (α ∘ α0)).
   - destruct q0; try exact tt.
-    simpl.
-    refine (let T' := _ :
-           forall p0 : Obj, p ≤ p0 -> forall p1 : Obj, p0 ≤ p1 -> Type in _).
-    {
+    cbn.
+    simple refine (let T' := _ :
+               forall p0 : Obj, p ≤ p0 -> forall p1 : Obj, p0 ≤ p1 -> Type in _).
+   {
       intros.
-      refine (T p0 _ p1 X0). 
+      refine (T p0 _ p1 _). 
       assert (S p ≤ S p0).
       {
-        apply le_n_S_admitted; auto. 
+        apply Yle_n_S; auto. 
        }
-      exact (X1 ∘ ((le_S' p0))).
+      exact (X1 ∘ ((Yle_S' p0))).
+      assumption.
     }
-    refine (let X := _ : p ≤ q0 in _).
-    { pose (α ∘ α0). apply le_S_n_admitted; auto.
-     }
-    
-    assert (le_n_S_admitted p q0 (le_S_n_admitted p q0 (α ∘ α0)) =
+    simple refine (let X := _ : p ≤ q0 in _).
+    { 
+      pose (α ∘ α0). apply Yle_S_n; auto.
+    }
+    assert (Yle_n_S p q0 (Yle_S_n p q0 (α ∘ α0)) =
             α ∘ α0).
     generalize (α ∘ α0). clear. intro.
-    apply nat_irrY.
-    change (T q0 (α ∘ α0 ∘ (le_S' q0)) q0 #).
-    rewrite <- H. 
+    apply Ynat_irr.
+    change (T q0 (α ∘ α0 ∘ (Yle_S' q0)) q0 #).
+    rewrite <- H.
     apply (IHp T'). intros q1 α1 x.
     apply f. intros. specialize (x _  α2).
 
     assert ((fun (p1 : Obj) (α3 : p0 ≤ p1) =>
       T p1
         (fun (R : Obj) (k : Hom p1 R) =>
-         le_n_S_admitted p q1
+         Yle_n_S p q1
            (fun (R0 : Obj) (k0 : Hom q1 R0) => α1 R0 k0) R
-           (le_S' q1 R (α2 R (α3 R k))))) =
+           (Yle_S' q1 R (α2 R (α3 R k))))) =
              (fun (p : Obj) (α : p0 ≤ p) =>
          T' p (fun (R : Obj) (k : Hom p R) => α1 R (α2 R (α R k))))).
     unfold T'. 
-    apply funext_. intro q3. apply funext_. intro α4.
+    apply functional_extensionality_dep. intro q3. apply functional_extensionality_dep. intro α4.
     apply f_equal. 
-    intros. apply nat_irrY.
+    intros. apply Ynat_irr.
     rewrite H0.
     
     apply x. 
@@ -119,3 +153,77 @@ Defined.
 Definition fixp : forall (T:Type), ((later T) ->  T) -> T  :=
   fun T f => Box_counit _ (fixp_ T f).
 
+Forcing Definition nextp : forall (T:Type), T -> (later T) using Obj Hom.
+Proof.
+  intros.
+  destruct p;
+  unfold laterᶠ.
+  exact tt.
+  refine (X p _).
+Defined.
+
+Forcing Definition switchp : (later Type) -> Type using Obj Hom.
+Proof.
+  intros p H p' H'.
+  destruct p'.
+  exact unit.
+  refine (H (S p') _ p' _).
+  eapply H'.
+  tauto.
+Defined.
+
+Lemma funext_ext : forall (p : Obj) (f g : forall (p0 : Obj) (α : p ≤ p0), forall p1 : Obj, p0 ≤ p1 -> Type),
+ (forall (p0 p1 : Obj) (α : p ≤ p0) (α' : p0 ≤ p1), (f p0 α p1 α') = (g p0 α p1 α')) -> f = g.
+Proof.
+ intros p f g H.
+ eapply (functional_extensionality_dep f g).
+ intro p0.
+ eapply (functional_extensionality (f p0) (g p0)).
+ intro α.
+ eapply (functional_extensionality_dep (f p0 α) (g p0 α)).
+ intro p1.
+ eapply (functional_extensionality (f p0 α p1) (g p0 α p1)).
+ intro α'.
+ eapply H. 
+Qed.
+
+Inductive eq {A : Type} (x : A) : A -> Type :=  eq_refl : eq x x
+where "x = y :> A" := (@eq A x y) : type_scope.
+
+Notation "x = y" := (x = y :>_) : type_scope.
+
+Forcing Translate eq using Obj Hom.
+
+Definition eq_is_eq : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #),
+    Logic.eq x y -> eqᶠ p _ x y.
+Proof.
+  intros. rewrite H. apply eq_reflᶠ.
+Defined.
+
+
+Forcing Definition switch_next : forall (T:Type), (switchp (nextp Type T)) = (later T) using Obj Hom.
+Proof.
+  intros.
+  eapply eq_is_eq.
+  apply (funext_ext p).
+  intros.
+  destruct p0;
+  destruct p1;
+  reflexivity.
+Defined.
+
+Forcing Definition mu : (Type -> Type) -> Type using Obj Hom.
+Proof.
+intros p f p' H.
+eapply fixp.
+intro x.
+refine (f p' H _ p' _).
+intros.
+eapply (switchp x).
+auto.
+Qed.
+
+
+Forcing Definition unfold : forall (f: Type -> Type), mu f = f (later (mu f)) using Obj Hom.
+Proof.
+unfold mup.
