@@ -9,57 +9,18 @@ CoInductive Glob : Type :=
   { obj : Type ;
     eq : forall x y : obj, Glob}.
 
-(* Record Glob' := *)
-(*   { *)
-(*     s_glob : nat; *)
-(*     build_glob : nat -> {obj : Type & forall x y:obj, nat} *)
-(*   }.  *)
-
-(* Definition obj' (G:Glob') : Type := (G.(build_glob) (G.(s_glob))).1. *)
-
-(* Definition eq' (G:Glob') (x y : obj' G) : Glob' := *)
-(*   Build_Glob' ((G.(build_glob) (G.(s_glob))).2 x y) *)
-(*               G.(build_glob). *)
-
-(* CoFixpoint unitᶠ : Glob := Build_Glob unit (fun _ _  => unitᶠ). *)
-
 CoInductive elt (G:Glob): Type :=
   { here : G.(obj) ;
     next : elt (G.(eq) here here)}.
 
-(* Record elt' (G:Glob) := *)
-(*   { *)
-(*     s_elt : Glob -> nat; *)
-(*     build_elt : forall G, nat -> {here : G.(obj) & s_elt (G.(eq) here here)} *)
-(*   }. *)
-
-(* Record elt' (G:Glob) := *)
-(*   { *)
-(*     s_elt : nat; *)
-(*     build_elt : forall G, nat -> {here : obj G & nat} *)
-(*   }. *)
-
-Record elt' (G:Glob) :=
-  {
-    S_elt : Glob -> Type ;
-    s_elt : S_elt G;
-    build_elt : forall G, S_elt G -> {here : obj G & S_elt (eq G here here)}
-  }.
-
-Fixpoint elt'' (n:nat) : Glob -> Type :=
-  fun G => match n with
-        | 0 => G.(obj)
-        | S n => {x:G.(obj) & elt'' n (G.(eq) x x)}
-        end. 
-  
 Definition Cubical : Type := { G : Glob & forall x, elt (G.(eq) x x)}. 
 
-CoInductive hom (X Y : Glob) : Type :=
-  { Gfun : X.(obj) -> Y.(obj);
-    Gfun_next : forall x x': X.(obj), hom (X.(eq) x x') (Y.(eq) (Gfun x) (Gfun x'))}.
+(* CoInductive hom (X Y : Glob) : Type := *)
+(*   { Gfun : X.(obj) -> Y.(obj); *)
+(*     Gfun_next : forall x x': X.(obj), hom (X.(eq) x x') (Y.(eq) (Gfun x) (Gfun x'))}. *)
 
-Definition IsEqual X Y (f g : hom X Y) (x:X.(obj)) : Glob :=
-    Y.(eq) (f.(Gfun _ _) x) (g.(Gfun _ _) x). 
+(* Definition IsEqual X Y (f g : hom X Y) (x:X.(obj)) : Glob := *)
+(*     Y.(eq) (f.(Gfun _ _) x) (g.(Gfun _ _) x).  *)
 
 CoFixpoint _Typeᶠ : Glob := Build_Glob Glob (fun _ _ => _Typeᶠ).  
 
@@ -75,7 +36,7 @@ CoFixpoint Prodᶠ (A:Glob) (B : elt A -> Typeᶠ.1.(obj)) : Glob :=
 
 CoFixpoint Lamᶠ (A:Glob) (B : elt A -> Typeᶠ.1.(obj)) (t: forall x: elt A, elt (B x)) :
   elt (Prodᶠ A B).
-simple refine (Build_elt (Prodᶠ A B) (fun x => (t x).(here _)) _).
+refine (Build_elt (Prodᶠ A B) (fun x => (t x).(here _)) _).
 cbn. apply Lamᶠ. intros x. apply ((t x).(next _)).
 Defined. 
 
@@ -90,9 +51,11 @@ Defined.
 CoFixpoint etaᶠ (A:Glob) : elt A -> elt A :=
   fun x => Build_elt _ x.(here _) (etaᶠ _ x.(next _)).
 
-Definition eta_lawᶠ (A:Glob) (x:elt A) (e : forall (A:Glob) x, etaᶠ A x = x) :
-  (etaᶠ _ x).(next _) = x.(next _).
+Definition eta_lawᶠ :
+  (forall (A:Glob) x, etaᶠ A x = x) ->
+   forall (A:Glob) x, (etaᶠ A x).(next _) = x.(next _).
 Proof.
+  intros e A x.
   exact (e (eq A (here A (etaᶠ A x)) (here A (etaᶠ A x))) (next A x)). 
 Defined. 
 
@@ -104,16 +67,11 @@ Proof.
 Abort.
 
 Definition AppLamᶠ (A:Glob) (B : elt A -> Typeᶠ.1.(obj)) 
-           (t: forall x: elt A, elt (B x)) (x:elt A) : Appᶠ _ _ (Lamᶠ _ _ t) x =
-                                                  t x.
-Proof.
-  lazy.
-Abort.
-
-Definition AppLamᶠ (A:Glob) (B : elt A -> Typeᶠ.1.(obj)) 
            (t: forall x: elt A, elt (B x)) (x:elt A) : (Appᶠ _ _ (Lamᶠ _ _ t) x).(here _) =
                                                   (t x).(here _).
-Admitted. 
+Proof.
+  reflexivity.
+Defined.
 
 Definition AppLam_nextᶠ (A:Glob) (B : elt A -> Typeᶠ.1.(obj)) (x:elt A)
            (t: forall x: elt A, elt (B x)) 
