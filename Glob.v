@@ -97,10 +97,46 @@ simple refine (Build_elt _ _ _).
   apply Lamᶠ; intros E; apply (E.(next)).
 Defined.
 
-Definition reflᵇ : elt (Prodᶠ Typeᶠ (fun A => Prodᶠ A.(here) (fun x => (Appᶠ _ _ (Appᶠ _ _ (Appᶠ _ _ eqᵇ A) x) x).(here)))).
+Definition Appᵇ := Appᶠ.
+
+Arguments Appᵇ {_ _} _ _.
+
+Definition Prodᵇ (A : elt Typeᶠ) (B : elt (A.(here)) -> elt Typeᶠ) : elt Typeᶠ.
 Proof.
+cofix.
+simple refine (Build_elt _ _ _).
++ refine (Prodᶠ A.(here) (fun x => (B x).(here))).
++ cbn.
+  simple refine (Build_elt (Equiv _ _) (Identity _) _).
+  apply Lamᶠ; intros x; apply (x.(next)).
+Defined.
+
+Definition reflᵇ : elt (Prodᵇ Typeᵇ (fun A => Prodᵇ A (fun x => (Appᵇ (Appᵇ (Appᵇ eqᵇ A) x) x)))).(here).
+Proof.
+cbn.
 apply Lamᶠ; intros A.
 apply Lamᶠ; intros x.
 cbn.
 apply x.(next).
 Defined.
+
+(* forall (A : Type) (P : A -> Type) (x : A) (y : A) (e : x = y) (p : P x) : P y *)
+
+Definition transportᵇ : elt
+  (Prodᵇ Typeᵇ (fun A =>
+    Prodᵇ (Prodᵇ A (fun _ => Typeᵇ)) (fun P =>
+      Prodᵇ A (fun x =>
+        Prodᵇ A (fun y =>
+          Prodᵇ (Appᵇ (Appᵇ (Appᵇ eqᵇ A) x) x) (fun e =>
+            Prodᵇ (Appᵇ P x) (fun p =>
+              Appᵇ P y))))))).(here).
+Proof.
+cbn.
+apply Lamᶠ; intros A.
+apply Lamᶠ; intros P.
+apply Lamᶠ; intros x.
+apply Lamᶠ; intros y.
+apply Lamᶠ; intros e.
+apply Lamᶠ; intros p.
+Abort.
+
