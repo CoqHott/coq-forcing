@@ -23,17 +23,19 @@ CoFixpoint Prodᶠ (A:Glob) (B : elt A -> Glob) : Glob :=
 
 CoFixpoint Lamᶠ (A:Glob) (B : elt A -> Glob) (t: forall x: elt A, elt (B x)) :
   elt (Prodᶠ A B).
+Proof.
 refine (Build_elt (Prodᶠ A B) (fun x => (t x).(here _)) _).
 cbn. apply Lamᶠ. intros x. apply ((t x).(next _)).
-Defined. 
+Defined.
 
 Definition Appᶠ (A:Glob) (B : elt A -> Glob) 
            (f : elt (Prodᶠ A B)) : forall (x : elt A), elt (B x).
+Proof.
 intro x; revert B f. cofix.  intros B f. 
 simple refine (Build_elt (B x) (f.(here _) x) _).
 apply (Appᶠ (fun x => (eq (B x) (here (Prodᶠ A B) f x) (here (Prodᶠ A B) f x)))).
 apply (f.(next _)). 
-Defined. 
+Defined.
 
 Record TypeEquiv (A B : Glob) : Type :=
   {
@@ -53,24 +55,34 @@ Defined.
 Definition Typeᶠ : Glob := Build_Glob Glob Equiv. 
 
 Definition Id_fun A: elt (Prodᶠ A (fun _ => A)) := Lamᶠ A (fun _ => A) (fun x => x).  
-    
+
 Definition Identity (A:Glob) : TypeEquiv A A.
+Proof.
 simple refine (Build_TypeEquiv _ _ (Id_fun A) (Id_fun A) _ _).
 - intros. exact ((x.(next _)).(here _)).
 - intros. exact ((x.(next _)).(here _)).
 Defined. 
-  
-(*
-Definition ID_eq (A:Glob) : elt
-     (_Prodᶠ A .1 (fun x : elt A .1 => eq A .1 (here A .1 x) (here A .1 x))).
+
+Definition Identityᶠ (A : Glob) : elt (Equiv A A).
 Proof.
-  cbn in *. revert A. cofix. intro A. simple refine (Build_elt _ _ _).
-    + cbn. intros x. exact (x.(next _).(here _)).
-    + cbn. simple refine (Build_elt _ _ _).
-      * cbn. intro x. exact (x.(next _).(next _).(here _)).
-      * cbn. admit. 
-Admitted. 
-*)
+simple refine (Build_elt (Equiv A A) (Identity A) _).
+apply Lamᶠ; intros x; apply (x.(next _)).
+Defined.
+
+Definition Typeᵇ : elt Typeᶠ.
+Proof.
+simple refine (Build_elt Typeᶠ Typeᶠ _).
+cbn.
+simple refine (Build_elt (Equiv Typeᶠ Typeᶠ) (Identity Typeᶠ) _).
+apply Lamᶠ; intros x; apply (x.(next _)).
+Defined.
+
+Definition ID_eq (A:Glob) : elt (Prodᶠ A (fun x : elt A => A.(eq) x.(here _) x.(here _))).
+Proof.
+  cbn in *.
+  apply Lamᶠ; intros x; apply (x.(next _)).
+Defined.
+
 
 CoFixpoint etaᶠ (A:Glob) : elt A -> elt A :=
   fun x => Build_elt _ x.(here _) (etaᶠ _ x.(next _)).
