@@ -17,6 +17,9 @@ CoInductive elt (G:Glob): Type :=
   { here : G.(obj) ;
     next : elt (G.(eq) here here)  }.
 
+Arguments here {_} _.
+Arguments next {_} _.
+
 CoFixpoint Prodᶠ (A:Glob) (B : elt A -> Glob) : Glob :=
   Build_Glob (forall x: elt A, (B x).(obj))
              (fun f g => Prodᶠ A (fun x => ((B x).(eq) (f x) (g x)))).
@@ -24,32 +27,32 @@ CoFixpoint Prodᶠ (A:Glob) (B : elt A -> Glob) : Glob :=
 CoFixpoint Lamᶠ (A:Glob) (B : elt A -> Glob) (t: forall x: elt A, elt (B x)) :
   elt (Prodᶠ A B).
 Proof.
-refine (Build_elt (Prodᶠ A B) (fun x => (t x).(here _)) _).
-cbn. apply Lamᶠ. intros x. apply ((t x).(next _)).
+refine (Build_elt (Prodᶠ A B) (fun x => (t x).(here)) _).
+cbn. apply Lamᶠ. intros x. apply ((t x).(next)).
 Defined.
 
 Definition Appᶠ (A:Glob) (B : elt A -> Glob) 
            (f : elt (Prodᶠ A B)) : forall (x : elt A), elt (B x).
 Proof.
 intro x; revert B f. cofix.  intros B f. 
-simple refine (Build_elt (B x) (f.(here _) x) _).
-apply (Appᶠ (fun x => (eq (B x) (here (Prodᶠ A B) f x) (here (Prodᶠ A B) f x)))).
-apply (f.(next _)). 
+simple refine (Build_elt (B x) (f.(here) x) _).
+apply (Appᶠ (fun x => (eq (B x) (here f x) (here f x)))).
+apply (f.(next)). 
 Defined.
 
 Record TypeEquiv (A B : Glob) : Type :=
   {
     equiv : elt (Prodᶠ A (fun _ => B)) ;
     equiv_inv : elt (Prodᶠ B (fun _ => A)) ;
-    sect : forall x, (A.(eq) (Appᶠ _ _ equiv_inv (Appᶠ _ _ equiv x)).(here _) x.(here _)).(obj);
-    retr : forall x, (B.(eq) (Appᶠ _ _ equiv (Appᶠ _ _ equiv_inv x)).(here _) x.(here _)).(obj);
+    sect : forall x, (A.(eq) (Appᶠ _ _ equiv_inv (Appᶠ _ _ equiv x)).(here) x.(here)).(obj);
+    retr : forall x, (B.(eq) (Appᶠ _ _ equiv (Appᶠ _ _ equiv_inv x)).(here) x.(here)).(obj);
     (* no adjunction required ? *)
   }.
 
 Definition Equiv (A B : Glob) : Glob.
 Proof.
   refine (Build_Glob (TypeEquiv A B) (fun f g => _)).
-  exact (Prodᶠ A (fun x => (B.(eq) (Appᶠ _ _ f.(equiv _ _) x).(here _) (Appᶠ _ _ g.(equiv _ _) x).(here _)))).
+  exact (Prodᶠ A (fun x => (B.(eq) (Appᶠ _ _ f.(equiv _ _) x).(here) (Appᶠ _ _ g.(equiv _ _) x).(here)))).
 Defined.
 
 Definition Typeᶠ : Glob := Build_Glob Glob Equiv. 
@@ -59,14 +62,14 @@ Definition Id_fun A: elt (Prodᶠ A (fun _ => A)) := Lamᶠ A (fun _ => A) (fun 
 Definition Identity (A:Glob) : TypeEquiv A A.
 Proof.
 simple refine (Build_TypeEquiv _ _ (Id_fun A) (Id_fun A) _ _).
-- intros. exact ((x.(next _)).(here _)).
-- intros. exact ((x.(next _)).(here _)).
+- intros. exact ((x.(next)).(here)).
+- intros. exact ((x.(next)).(here)).
 Defined. 
 
 Definition Identityᶠ (A : Glob) : elt (Equiv A A).
 Proof.
 simple refine (Build_elt (Equiv A A) (Identity A) _).
-apply Lamᶠ; intros x; apply (x.(next _)).
+apply Lamᶠ; intros x; apply (x.(next)).
 Defined.
 
 Definition Typeᵇ : elt Typeᶠ.
@@ -74,94 +77,30 @@ Proof.
 simple refine (Build_elt Typeᶠ Typeᶠ _).
 cbn.
 simple refine (Build_elt (Equiv Typeᶠ Typeᶠ) (Identity Typeᶠ) _).
-apply Lamᶠ; intros x; apply (x.(next _)).
+apply Lamᶠ; intros x; apply (x.(next)).
 Defined.
 
-Definition ID_eq (A:Glob) : elt (Prodᶠ A (fun x : elt A => A.(eq) x.(here _) x.(here _))).
+Definition ID_eq (A:Glob) : elt (Prodᶠ A (fun x : elt A => A.(eq) x.(here) x.(here))).
 Proof.
   cbn in *.
-  apply Lamᶠ; intros x; apply (x.(next _)).
+  apply Lamᶠ; intros x; apply (x.(next)).
 Defined.
 
-
-CoFixpoint etaᶠ (A:Glob) : elt A -> elt A :=
-  fun x => Build_elt _ x.(here _) (etaᶠ _ x.(next _)).
-
-Definition eta_lawᶠ :
-  (forall (A:Glob) x, etaᶠ A x = x) ->
-   forall (A:Glob) x, (etaᶠ A x).(next _) = x.(next _).
+Definition eqᵇ : elt (Prodᶠ Typeᶠ (fun A => Prodᶠ A.(here) (fun x => Prodᶠ A.(here) (fun y => Typeᶠ)))).
 Proof.
-  intros e A x.
-  exact (e (eq A (here A (etaᶠ A x)) (here A (etaᶠ A x))) (next A x)). 
-Defined. 
-
-Definition AppLam_idᶠ (A:Glob) 
-           (t: forall x: elt A, elt A := fun x => x) (x:elt A) : Appᶠ _ _ (Lamᶠ _ _ t) x =
-                                                  t x.
-Proof.
-  lazy. 
-Abort.
-
-Definition AppLamᶠ (A:Glob) (B : elt A -> Typeᶠ.1.(obj)) 
-           (t: forall x: elt A, elt (B x)) (x:elt A) : (Appᶠ _ _ (Lamᶠ _ _ t) x).(here _) =
-                                                  (t x).(here _).
-Proof.
-  reflexivity.
+apply Lamᶠ; intros A.
+apply Lamᶠ; intros x.
+apply Lamᶠ; intros y.
+simple refine (Build_elt _ _ _).
++ refine (A.(here).(eq) x.(here) y.(here)).
++ clear. simple refine (Build_elt (Equiv _ _) (Identity _) _).
+  apply Lamᶠ; intros E; apply (E.(next)).
 Defined.
 
-Definition AppLam_nextᶠ (A:Glob) (B : elt A -> Typeᶠ.1.(obj)) (x:elt A)
-           (t: forall x: elt A, elt (B x)) 
-  (e : forall (B : elt A -> Typeᶠ.1.(obj))
-          (t: forall x: elt A, elt (B x)) , Appᶠ _ _ (Lamᶠ _ _ t) x = t x) :
-  (Appᶠ _ _ (Lamᶠ _ _ t) x).(next _) =
-  (t x).(next _).          
-  exact (e 
-           (fun x0 : elt A =>
-              eq (B x0) (here (Prodᶠ A B) (Lamᶠ A B t) x0)
-                 (here (Prodᶠ A B) (Lamᶠ A B t) x0))
-           (fun x0 : elt A => next (B x0) (t x0))).
-Defined. 
-
-
-Definition Bangᶠ (A:Glob) (t:A.1.(obj)) : elt A.1 := Build_elt A.1 t (A.2 t).
-
-(*
-
-Definition Obj := nat.
-Axiom Hom : Obj -> Obj -> Type.
-
-Notation "P ≤ Q" := (forall R, Hom Q R -> Hom P R) (at level 70).
-Notation "#" := (fun (R : Obj) (k : Hom _ R) => k).
-Notation "f ∘ g" := (fun (R : Obj) (k : Hom _ R) => f R (g R k)) (at level 40).
-
-Axiom ε : forall n, n ≤ S n.
-Axiom δ₀ δ₁ : forall n, S n ≤ n.
-
-
-Record Typeᶠ@{i} p := cType {
-  type : forall p0 (α : p ≤ p0), Type@{i};
-  path :
-    (forall p0 (α : p ≤ p0), type (S p0) (α ∘ ε p0)) ->
-    (forall p0 (α : p ≤ p0), type p0 (α ∘ ε p0 ∘ δ₀ p0)) ->
-    (forall p0 (α : p ≤ p0), type p0 (α ∘ ε p0 ∘ δ₁ p0)) ->
-    Type@{i};
-}.
-
-Definition mkTypeᶠ@{i j} p : Typeᶠ@{j} p.
+Definition reflᵇ : elt (Prodᶠ Typeᶠ (fun A => Prodᶠ A.(here) (fun x => (Appᶠ _ _ (Appᶠ _ _ (Appᶠ _ _ eqᵇ A) x) x).(here)))).
 Proof.
-simple refine (cType@{j} p _ _).
-+ refine (fun p0 α => Typeᶠ@{i} p).
-+ intros e x y.  exact Prop.
+apply Lamᶠ; intros A.
+apply Lamᶠ; intros x.
+cbn.
+apply x.(next).
 Defined.
-
-Definition mkProdᶠ@{i j k} p
-  (A : forall p0 (α : p ≤ p0), Typeᶠ@{i} p0)
-  (B : forall p0 (α : p ≤ p0), (forall p1 (α0 : p0 ≤ p1), (A p1 (α ∘ α0)).(type _) p1 #) -> Typeᶠ@{j} p0)
-  : Typeᶠ@{k} p.
-Proof.
-refine (cType@{k} p _ _).
-+ refine (fun p0 α => forall x : (forall p1 α0, (A p1 (α ∘ α0)).(type _) p1 #), (B p0 α x).(type _) p0 #).
-+ intros.
-  exact Prop.
-Defined.
-*)
