@@ -97,10 +97,47 @@ Check ((A 3).(T1).(Te).(Te) :
   forall x₀ : Pack (A 3).(T1).(T0).(T0) (A 3).(T1).(T0).(T1) (A 3).(T1).(T0).(Te),
   forall x₁ : Pack (A 3).(T1).(T1).(T0) (A 3).(T1).(T1).(T1) (A 3).(T1).(T1).(Te),
   (A 3).(T1).(Te).(T0) x₀.(T0) x₁.(T0) -> (A 3).(T1).(Te).(T1) x₀.(T1) x₁.(T1) -> Type).
+Check ((A 3).(T0).(Te).(T0) : (A 3).(T0).(T0).(T0) -> (A 3).(T0).(T1).(T0) -> Type).
+Check ((A 3).(T0).(Te).(T1) : (A 3).(T0).(T0).(T1) -> (A 3).(T0).(T1).(T1) -> Type).
+Check ((A 3).(T1).(Te).(T0) : (A 3).(T1).(T0).(T0) -> (A 3).(T1).(T1).(T0) -> Type).
+Check ((A 3).(T1).(Te).(T1) : (A 3).(T1).(T0).(T1) -> (A 3).(T1).(T1).(T1) -> Type).
+Check ((A 3).(Te).(T0).(T0) : (A 3).(T0).(T0).(T0) -> (A 3).(T1).(T0).(T0) -> Type).
+Check ((A 3).(Te).(T0).(T1) : (A 3).(T0).(T0).(T1) -> (A 3).(T1).(T0).(T1) -> Type).
+Check ((A 3).(Te).(T1).(T0) : (A 3).(T0).(T1).(T0) -> (A 3).(T1).(T1).(T0) -> Type).
+Check ((A 3).(Te).(T1).(T1) : (A 3).(T0).(T1).(T1) -> (A 3).(T1).(T1).(T1) -> Type).
 Check ((A 3).(Te).(Te) :
-  forall x₀ : Pack _ _ _,
-  forall x₁ : Pack _ _ _,
-  _).
+  forall x₀ :
+    Pack
+      (Pack (A 3).(T0).(T0).(T0) (A 3).(T0).(T0).(T1) (A 3).(T0).(T0).(Te))
+      (Pack (A 3).(T0).(T1).(T0) (A 3).(T0).(T1).(T1) (A 3).(T0).(T1).(Te))
+      (fun x₀₀ x₀₁ =>
+        forall x₀ᵢ₀ : (A 3).(T0).(Te).(T0) x₀₀.(T0) x₀₁.(T0),
+        forall x₀ᵢ₁ : (A 3).(T0).(Te).(T1) x₀₀.(T1) x₀₁.(T1),
+        _),
+  forall x₁ :
+    Pack
+      (Pack (A 3).(T1).(T0).(T0) (A 3).(T1).(T0).(T1) (A 3).(T1).(T0).(Te))
+      (Pack (A 3).(T1).(T1).(T0) (A 3).(T1).(T1).(T1) (A 3).(T1).(T1).(Te))
+      (fun x₁₀ x₁₁ =>
+        forall x₁ᵢ₀ : (A 3).(T1).(Te).(T0) x₁₀.(T0) x₁₁.(T0),
+        forall x₁ᵢ₁ : (A 3).(T1).(Te).(T1) x₁₀.(T1) x₁₁.(T1),
+        _),
+  Pack _ _ _).
+
+Eval compute in
+(fun
+             (x₀₀ : Pack (T0 (T0 (T0 (A 3)))) (T1 (T0 (T0 (A 3))))
+                      (Te (T0 (T0 (A 3)))))
+             (x₀₁ : Pack (T0 (T1 (T0 (A 3)))) (T1 (T1 (T0 (A 3))))
+                      (Te (T1 (T0 (A 3))))) =>
+           forall (x₀ᵢ₀ : T0 (Te (T0 (A 3))) (T0 x₀₀) (T0 x₀₁))
+             (x₀ᵢ₁ : T1 (Te (T0 (A 3))) (T1 x₀₀) (T1 x₀₁)),
+           F (cube 0)
+             (M (cube 0) (T0 (T0 (T0 (A 3)))) (T0 (T1 (T0 (A 3))))
+                (T0 (Te (T0 (A 3)))) (T0 x₀₀) (T0 x₀₁))
+             (M (cube 0) (T1 (T0 (T0 (A 3)))) (T1 (T1 (T0 (A 3))))
+                (T1 (Te (T0 (A 3)))) (T1 x₀₀) (T1 x₀₁))
+             (Te (Te (T0 (A 3))) x₀₀ x₀₁) x₀ᵢ₀ x₀ᵢ₁).
 
 (*
 Definition Arrowᶠ (A : TYPE) (B : TYPE) : TYPE.
