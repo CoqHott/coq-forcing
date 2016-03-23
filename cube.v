@@ -1,4 +1,5 @@
 Set Primitive Projections.
+Unset Printing Primitive Projection Compatibility.
 Set Universe Polymorphism.
 
 Notation "x .1" := (projT1 x) (at level 3).
@@ -44,7 +45,9 @@ Proof.
     simple refine (C.(M) _ _ r0 x0.(T0) x1.(T0)).
     simple refine (C.(M) _ _ r1 x0.(T1) x1.(T1)).
   + intros A. exact (Pack (C.(h) A.(T0)) (C.(h) A.(T1)) (C.(F) _ _ A.(Te))).
-  + intros A0 A1 Ae x0 x1. exact (forall x x', C.(F) _ _ (Ae.(Te) x0 x1) x x').
+  + intros A0 A1 Ae x0 x1. cbn in *.
+    exact (Pack _ _ (C.(F) _ _ (Ae.(Te) x0 x1))).
+(*     exact (forall x x', C.(F) _ _ (Ae.(Te) x0 x1) x x'). *)
   + intros A0 A1 r x0 x1. 
     cbn in *. simple refine (pack (C.(M) _ _ r.(T0) x0.(T0) x1.(T0))
                                   (C.(M) _ _ r.(T1) x0.(T1) x1.(T1))
@@ -105,58 +108,49 @@ Check ((A 3).(Te).(T0).(T0) : (A 3).(T0).(T0).(T0) -> (A 3).(T1).(T0).(T0) -> Ty
 Check ((A 3).(Te).(T0).(T1) : (A 3).(T0).(T0).(T1) -> (A 3).(T1).(T0).(T1) -> Type).
 Check ((A 3).(Te).(T1).(T0) : (A 3).(T0).(T1).(T0) -> (A 3).(T1).(T1).(T0) -> Type).
 Check ((A 3).(Te).(T1).(T1) : (A 3).(T0).(T1).(T1) -> (A 3).(T1).(T1).(T1) -> Type).
+Check ((A 3).(Te).(T0).(Te) :
+  forall x₀ : Pack (A 3).(T0).(T0).(T0) (A 3).(T0).(T0).(T1) (A 3).(T0).(T0).(Te),
+  forall x₁ : Pack (A 3).(T1).(T0).(T0) (A 3).(T1).(T0).(T1) (A 3).(T1).(T0).(Te),
+    (A 3).(Te).(T0).(T0) x₀.(T0) x₁.(T0) ->
+    (A 3).(Te).(T0).(T1) x₀.(T1) x₁.(T1) ->
+    Type).
+Check ((A 3).(Te).(T1).(Te) :
+  forall x₀ : Pack (A 3).(T0).(T1).(T0) (A 3).(T0).(T1).(T1) (A 3).(T0).(T1).(Te),
+  forall x₁ : Pack (A 3).(T1).(T1).(T0) (A 3).(T1).(T1).(T1) (A 3).(T1).(T1).(Te),
+    (A 3).(Te).(T1).(T0) x₀.(T0) x₁.(T0) ->
+    (A 3).(Te).(T1).(T1) x₀.(T1) x₁.(T1) ->
+    Type).
+
+Eval compute in ltac:(let T := type of (A 3).(Te).(Te) in exact T).
+
 Check ((A 3).(Te).(Te) :
   forall x₀ :
     Pack
       (Pack (A 3).(T0).(T0).(T0) (A 3).(T0).(T0).(T1) (A 3).(T0).(T0).(Te))
       (Pack (A 3).(T0).(T1).(T0) (A 3).(T0).(T1).(T1) (A 3).(T0).(T1).(Te))
-      (fun x₀₀ x₀₁ =>
-        forall x₀ᵢ₀ : (A 3).(T0).(Te).(T0) x₀₀.(T0) x₀₁.(T0),
-        forall x₀ᵢ₁ : (A 3).(T0).(Te).(T1) x₀₀.(T1) x₀₁.(T1),
-        _),
+      (fun x₀₀ x₀₁ => Pack
+        ((A 3).(T0).(Te).(T0) x₀₀.(T0) x₀₁.(T0))
+        ((A 3).(T0).(Te).(T1) x₀₀.(T1) x₀₁.(T1))
+        (fun x₀ᵢ₀ x₀ᵢ₁ => (A 3).(T0).(Te).(Te) x₀₀ x₀₁ x₀ᵢ₀ x₀ᵢ₁)),
   forall x₁ :
     Pack
       (Pack (A 3).(T1).(T0).(T0) (A 3).(T1).(T0).(T1) (A 3).(T1).(T0).(Te))
       (Pack (A 3).(T1).(T1).(T0) (A 3).(T1).(T1).(T1) (A 3).(T1).(T1).(Te))
-      (fun x₁₀ x₁₁ =>
-        forall x₁ᵢ₀ : (A 3).(T1).(Te).(T0) x₁₀.(T0) x₁₁.(T0),
-        forall x₁ᵢ₁ : (A 3).(T1).(Te).(T1) x₁₀.(T1) x₁₁.(T1),
-        _),
-  Pack _ _ _).
-
-Eval compute in
-(fun
-             (x₀₀ : Pack (T0 (T0 (T0 (A 3)))) (T1 (T0 (T0 (A 3))))
-                      (Te (T0 (T0 (A 3)))))
-             (x₀₁ : Pack (T0 (T1 (T0 (A 3)))) (T1 (T1 (T0 (A 3))))
-                      (Te (T1 (T0 (A 3))))) =>
-           forall (x₀ᵢ₀ : T0 (Te (T0 (A 3))) (T0 x₀₀) (T0 x₀₁))
-             (x₀ᵢ₁ : T1 (Te (T0 (A 3))) (T1 x₀₀) (T1 x₀₁)),
-           F (cube 0)
-             (M (cube 0) (T0 (T0 (T0 (A 3)))) (T0 (T1 (T0 (A 3))))
-                (T0 (Te (T0 (A 3)))) (T0 x₀₀) (T0 x₀₁))
-             (M (cube 0) (T1 (T0 (T0 (A 3)))) (T1 (T1 (T0 (A 3))))
-                (T1 (Te (T0 (A 3)))) (T1 x₀₀) (T1 x₀₁))
-             (Te (Te (T0 (A 3))) x₀₀ x₀₁) x₀ᵢ₀ x₀ᵢ₁).
-
-(*
-Definition Arrowᶠ (A : TYPE) (B : TYPE) : TYPE.
-Proof.
-intros n; revert A B; induction n; cbn - [cube]; intros A B.
-+ exact (ELT A -> (B 0)).
-+ cbn.
-  simple refine (pack _ _ _).
-  fold (cube n).(T).
-cbn.
-
-
-Definition Typeᶠ : TYPE.
-Proof.
-intros n; induction n; cbn.
-+ exact Type.
-+ 
-Defined.
-
-
-
- *)
+      (fun x₁₀ x₁₁ => Pack
+        ((A 3).(T1).(Te).(T0) x₁₀.(T0) x₁₁.(T0))
+        ((A 3).(T1).(Te).(T1) x₁₀.(T1) x₁₁.(T1))
+        (fun x₁ᵢ₀ x₁ᵢ₁ => (A 3).(T1).(Te).(Te) x₁₀ x₁₁ x₁ᵢ₀ x₁ᵢ₁)),
+  Pack
+    ((A 3).(Te).(T0).(T0) x₀.(T0).(T0) x₁.(T0).(T0) -> (A 3).(Te).(T1).(T0) x₀.(T1).(T0) x₁.(T1).(T0) -> Type)
+    ((A 3).(Te).(T0).(T1) x₀.(T0).(T1) x₁.(T0).(T1) -> (A 3).(Te).(T1).(T1) x₀.(T1).(T1) x₁.(T1).(T1) -> Type)
+    (fun A₀ A₁ =>
+      forall x'₀ : Pack
+        ((A 3).(Te).(T0).(T0) x₀.(T0).(T0) x₁.(T0).(T0))
+        ((A 3).(Te).(T0).(T1) x₀.(T0).(T1) x₁.(T0).(T1))
+        ((A 3).(Te).(T0).(Te) (x₀.(T0)) (x₁.(T0))),
+      forall x'₁ : Pack
+        ((A 3).(Te).(T1).(T0) x₀.(T1).(T0) x₁.(T1).(T0))
+        ((A 3).(Te).(T1).(T1) x₀.(T1).(T1) x₁.(T1).(T1))
+        ((A 3).(Te).(T1).(Te) (x₀.(T1)) (x₁.(T1))),
+      A₀ (x'₀.(T0)) (x'₁.(T0)) -> A₁ (x'₀.(T1)) (x'₁.(T1)) -> Type
+    )).
