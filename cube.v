@@ -58,6 +58,8 @@ Definition ELT (A : TYPE) := forall n, (cube n).(h) (A n).
 
 Axiom A : TYPE.
 
+Check (A 0 : Type).
+
 Check ((A 1).(T0) : Type).
 Check ((A 1).(T1) : Type).
 Check ((A 1).(Te) : (A 1).(T0) -> (A 1).(T1) -> Type).
@@ -73,12 +75,34 @@ Check ((A 2).(Te).(T1) : (A 2).(T0).(T1) -> (A 2).(T1).(T1) -> Type).
 Check ((A 2).(Te).(Te) :
   forall x₀ : Pack (A 2).(T0).(T0) (A 2).(T0).(T1) (A 2).(T0).(Te),
   forall x₁ : Pack (A 2).(T1).(T0) (A 2).(T1).(T1) (A 2).(T1).(Te),
-  (A 2).(Te).(T0) x₀.(T0) x₁.(T0) -> (A 2).(Te).(T1) x₀.(T1) x₁.(T1) -> _).
+  (A 2).(Te).(T0) x₀.(T0) x₁.(T0) -> (A 2).(Te).(T1) x₀.(T1) x₁.(T1) -> Type).
 
+Check ((A 3).(T0).(T0).(T0) : Type).
+Check ((A 3).(T0).(T0).(T1) : Type).
+Check ((A 3).(T0).(T0).(Te) : (A 3).(T0).(T0).(T0) -> (A 3).(T0).(T0).(T1) -> Type).
+Check ((A 3).(T0).(T1).(T0) : Type).
+Check ((A 3).(T0).(T1).(T1) : Type).
+Check ((A 3).(T0).(T1).(Te) : (A 3).(T0).(T1).(T0) -> (A 3).(T0).(T1).(T1) -> Type).
+Check ((A 3).(T0).(Te).(Te) :
+  forall x₀ : Pack (A 3).(T0).(T0).(T0) (A 3).(T0).(T0).(T1) (A 3).(T0).(T0).(Te),
+  forall x₁ : Pack (A 3).(T0).(T1).(T0) (A 3).(T0).(T1).(T1) (A 3).(T0).(T1).(Te),
+  (A 3).(T0).(Te).(T0) x₀.(T0) x₁.(T0) -> (A 3).(T0).(Te).(T1) x₀.(T1) x₁.(T1) -> Type).
+Check ((A 3).(T1).(T0).(T0) : Type).
+Check ((A 3).(T1).(T0).(T1) : Type).
+Check ((A 3).(T1).(T0).(Te) : (A 3).(T1).(T0).(T0) -> (A 3).(T1).(T0).(T1) -> Type).
+Check ((A 3).(T1).(T1).(T0) : Type).
+Check ((A 3).(T1).(T1).(T1) : Type).
+Check ((A 3).(T1).(T1).(Te) : (A 3).(T1).(T1).(T0) -> (A 3).(T1).(T1).(T1) -> Type).
+Check ((A 3).(T1).(Te).(Te) :
+  forall x₀ : Pack (A 3).(T1).(T0).(T0) (A 3).(T1).(T0).(T1) (A 3).(T1).(T0).(Te),
+  forall x₁ : Pack (A 3).(T1).(T1).(T0) (A 3).(T1).(T1).(T1) (A 3).(T1).(T1).(Te),
+  (A 3).(T1).(Te).(T0) x₀.(T0) x₁.(T0) -> (A 3).(T1).(Te).(T1) x₀.(T1) x₁.(T1) -> Type).
+Check ((A 3).(Te).(Te) :
+  forall x₀ : Pack _ _ _,
+  forall x₁ : Pack _ _ _,
+  _).
 
-(* Check ((A 2).(Te) : (A 1).(T0) -> (A 1).(T1) -> Type).
-
-
+(*
 Definition Arrowᶠ (A : TYPE) (B : TYPE) : TYPE.
 Proof.
 intros n; revert A B; induction n; cbn - [cube]; intros A B.
