@@ -68,6 +68,8 @@ Proof.
   exact (T q (f ∘ (Yle_S' q)) q #).
 Defined.
 
+Notation "⊳ A" := (later A) (at level 40).
+
 Lemma Yle_n_S m n : m ≤ n -> S m ≤ S n.
 Proof.
  intros H.
@@ -86,6 +88,67 @@ Proof.
  eapply Yle_to_le.
  eapply H.
 Qed.
+
+Forcing Definition later_app : forall A B (t : ⊳ (A -> B)) (u : ⊳ A), ⊳ B using Obj Hom.
+Proof.
+  intros p A B t u.
+  destruct p.
+  exact tt.
+  apply (t (S p) #).
+  intros q β.
+  (* how to avoid the rewrite ? *)
+  rewrite (Ynat_irr _ _ (Yle_S' p ∘ β) (Yle_n_S p q β ∘ Yle_S' q)).
+  exact (u (S q) (Yle_n_S p q β)).
+Defined.
+
+Notation "t ⊙ u" := (later_app _ _ t u) (at level 40).
+
+Forcing Definition nextp : forall (T:Type), T -> (later T) using Obj Hom.
+Proof.
+  intros.
+  destruct p;
+  unfold laterᶠ.
+  exact tt.
+  refine (X p _).
+Defined.
+
+Forcing Translate eq using Obj Hom.
+
+Definition eq_is_eq : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #),
+    Logic.eq x y -> eqᶠ p _ x y.
+Proof.
+  intros. rewrite H. apply eq_reflᶠ.
+Defined.
+
+Lemma funext_ext : forall (p : Obj) (f g : forall (p0 : Obj) (α : p ≤ p0), forall p1 : Obj, p0 ≤ p1 -> Type),
+ (forall (p0 p1 : Obj) (α : p ≤ p0) (α' : p0 ≤ p1), (f p0 α p1 α') = (g p0 α p1 α')) -> f = g.
+Proof.
+ intros p f g H.
+ eapply (functional_extensionality_dep f g).
+ intro p0.
+ eapply (functional_extensionality (f p0) (g p0)).
+ intro α.
+ eapply (functional_extensionality_dep (f p0 α) (g p0 α)).
+ intro p1.
+ eapply (functional_extensionality (f p0 α p1) (g p0 α p1)).
+ intro α'.
+ eapply H. 
+Qed.
+
+Forcing Definition next_id : forall A u, nextp _ (fun (x : A) => x) ⊙ u = u using Obj Hom.
+Proof.
+intros p A u.
+apply eq_is_eq.
+apply functional_extensionality_dep.
+intros q.
+apply functional_extensionality_dep.
+intros β.
+destruct q.
+  now destruct (u 0 β).
+cbn.
+cbv.
++ 
+
 
 Forcing Definition Box : Type -> Type using Obj Hom.
 Proof.
@@ -153,15 +216,6 @@ Defined.
 Definition fixp : forall (T:Type), ((later T) ->  T) -> T  :=
   fun T f => Box_counit _ (fixp_ T f).
 
-Forcing Definition nextp : forall (T:Type), T -> (later T) using Obj Hom.
-Proof.
-  intros.
-  destruct p;
-  unfold laterᶠ.
-  exact tt.
-  refine (X p _).
-Defined.
-
 Forcing Definition switchp : (later Type) -> Type using Obj Hom.
 Proof.
   intros p H p' H'.
@@ -172,33 +226,11 @@ Proof.
   tauto.
 Defined.
 
-Lemma funext_ext : forall (p : Obj) (f g : forall (p0 : Obj) (α : p ≤ p0), forall p1 : Obj, p0 ≤ p1 -> Type),
- (forall (p0 p1 : Obj) (α : p ≤ p0) (α' : p0 ≤ p1), (f p0 α p1 α') = (g p0 α p1 α')) -> f = g.
-Proof.
- intros p f g H.
- eapply (functional_extensionality_dep f g).
- intro p0.
- eapply (functional_extensionality (f p0) (g p0)).
- intro α.
- eapply (functional_extensionality_dep (f p0 α) (g p0 α)).
- intro p1.
- eapply (functional_extensionality (f p0 α p1) (g p0 α p1)).
- intro α'.
- eapply H. 
-Qed.
-
 Inductive eq {A : Type} (x : A) : A -> Type :=  eq_refl : eq x x
 where "x = y :> A" := (@eq A x y) : type_scope.
 
 Notation "x = y" := (x = y :>_) : type_scope.
 
-Forcing Translate eq using Obj Hom.
-
-Definition eq_is_eq : forall p A (x y: forall p0 (f:p ≤ p0), A p0 f p0 #),
-    Logic.eq x y -> eqᶠ p _ x y.
-Proof.
-  intros. rewrite H. apply eq_reflᶠ.
-Defined.
 
 
 Forcing Definition switch_next : forall (T:Type), (switchp (nextp Type T)) = (later T) using Obj Hom.
