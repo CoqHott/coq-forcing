@@ -1,4 +1,4 @@
-open Errors
+open CErrors
 open Pp
 open Util
 open Names
@@ -7,6 +7,9 @@ open Decl_kinds
 open Libobject
 open Globnames
 open Proofview.Notations
+
+module RelDecl = Context.Rel.Declaration
+module NamedDecl = Context.Named.Declaration
 
 (** Utilities *)
 
@@ -47,25 +50,25 @@ let in_translator : translator_obj -> obj =
 let empty_translator = Refmap.empty
 
 let force_tac cat c =
-  Proofview.Goal.nf_enter begin fun gl ->
+  Proofview.Goal.nf_enter { enter = begin fun gl ->
     let env = Proofview.Goal.env gl in
-    let sigma = Proofview.Goal.sigma gl in
+    let sigma = Sigma.to_evar_map (Proofview.Goal.sigma gl) in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
     let sigma, _ = Typing.type_of env sigma ans in
     Proofview.Unsafe.tclEVARS sigma <*>
     Tactics.letin_tac None Names.Name.Anonymous ans None Locusops.allHyps
-  end
+  end }
 
 let force_solve cat c =
-  Proofview.Goal.nf_enter begin fun gl ->
+  Proofview.Goal.nf_enter { enter = begin fun gl ->
     let env = Proofview.Goal.env gl in
-    let sigma = Proofview.Goal.sigma gl in
+    let sigma = Sigma.to_evar_map (Proofview.Goal.sigma gl) in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
-(*     msg_info (Termops.print_constr ans); *)
+    (*     msg_info (Termops.print_constr ans); *)
     let sigma, _ = Typing.type_of env sigma ans in
     Proofview.Unsafe.tclEVARS sigma <*>
-    Proofview.Refine.refine_casted begin fun h -> (h, ans) end
-  end
+    Refine.refine_casted {Sigma.run =  begin fun h -> Sigma.here ans h end }
+  end }
 
 let force_translate_constant cat cst ids =
   let id = match ids with
@@ -85,7 +88,7 @@ let force_translate_constant cat cst ids =
   let (sigma, body) = FTranslate.translate !translator cat env sigma body in
 (*   msg_info (Termops.print_constr body); *)
   let evdref = ref sigma in
-  let () = Typing.check env evdref body typ in
+  let () = Typing.e_check env evdref body typ in
   let sigma = !evdref in
   let (_, uctx) = Evd.universe_context sigma in
   let ce = Declare.definition_entry ~types:typ ~univs:uctx body in
@@ -134,11 +137,12 @@ let force_translate_inductive cat ind ids =
   let nparams = List.length mib.mind_params_ctxt in
   (** For each block in the inductive we build the translation *)
   let substind =
-    Array.map_to_list (fun oib -> (oib.mind_typename, None,
-			    Inductive.type_of_inductive env ((mib, oib), Univ.Instance.empty)))
-	       mib.mind_packets
+    Array.map_to_list (fun oib ->
+        NamedDecl.LocalAssum (oib.mind_typename,
+			      Inductive.type_of_inductive env ((mib, oib), Univ.Instance.empty)))
+      mib.mind_packets
   in
-  let invsubst = List.map pi1 substind in
+  let invsubst = List.map NamedDecl.get_id substind in
   let translator = add_translator !translator (List.map (fun id -> VarRef id, VarRef id) invsubst) in
 (** À chaque inductif I on associe une fonction λp.λparams.λindices.λ(qα), 
     (mkVar I) p params indices *)
@@ -149,12 +153,18 @@ let force_translate_inductive cat ind ids =
       let args = Array.init (narityctxt + 1) (fun i -> mkRel (narityctxt + 3 - i)) in
       let fnbody = mkApp (mkVar oib.mind_typename, args) in
       let obj = cat.FTranslate.cat_obj in
-      let fold (sigma, ctxt) (x, o, t_) =
+      let fold (sigma, ctxt) decl =
+        let (x, o, t_) = RelDecl.to_tuple decl in
         let (sigma, tr_t_) = FTranslate.translate_type translator cat env sigma t_ in
-        (sigma, (x, o, tr_t_) :: ctxt)
+        (sigma, RelDecl.of_tuple (x, o, tr_t_) :: ctxt)
       in
       let (sigma, tr_arity) = List.fold_left fold (sigma, []) oib.mind_arity_ctxt in
-      (sigma, it_mkLambda_or_LetIn fnbody ([(Anonymous, None, FTranslate.hom cat (mkRel 3) (mkRel (3 + narityctxt))); (Anonymous, None, obj)] @ tr_arity @ [(Anonymous, None, obj)]))
+      let open RelDecl in
+      (sigma, it_mkLambda_or_LetIn fnbody
+         ([LocalAssum (Anonymous, FTranslate.hom cat (mkRel 3) (mkRel (3 + narityctxt)));
+           LocalAssum (Anonymous, obj)]
+          @ tr_arity
+          @ [LocalAssum (Anonymous, obj)]))
     in
     let fold (sigma, acc) oib =
       let (sigma, fn) = fn_oib oib in
@@ -169,8 +179,12 @@ let force_translate_inductive cat ind ids =
     in
     (** Heuristic for the return type. Can we do better? *)
     let (sigma, s) =
-      if List.mem Sorts.InType body.mind_kelim then Evarutil.new_Type env sigma
-      else (sigma, mkProp)
+      let evdref = ref sigma in
+      let s =
+        if List.mem Sorts.InType body.mind_kelim then Evarutil.e_new_Type env evdref
+        else mkProp
+      in
+      !evdref, s
     in
     let (sigma, arity) =
       (** On obtient l'arité de l'inductif en traduisant le type de chaque indice
@@ -200,8 +214,11 @@ let force_translate_inductive cat ind ids =
       let typ_ = Vars.replace_vars substfn typ_ in 
       let typ_ = Reductionops.nf_beta Evd.empty typ_ in
       let typ_ = Vars.substn_vars (List.length params + 1) invsubst typ_ in
-      let envtyp_ = Environ.push_rel_context [Name (Nameops.add_suffix body.mind_typename "_f"),None,
-					      it_mkProd_or_LetIn arity params] env in
+      let envtyp_ =
+        Environ.push_rel (RelDecl.LocalAssum (Name (Nameops.add_suffix body.mind_typename "_f"),
+		                              it_mkProd_or_LetIn arity params))
+          env
+      in
       let envtyp_ = Environ.push_rel_context params envtyp_ in
       let sigma, ty = Typing.type_of envtyp_ sigma typ_ in                             
       let sigma, b = Reductionops.infer_conv ~pb:Reduction.CUMUL envtyp_ sigma ty s in
@@ -233,7 +250,8 @@ let force_translate_inductive cat ind ids =
   in
   let (sigma, params_) = FTranslate.translate_context translator cat env sigma mib.mind_params_ctxt in
   let (sigma, bodies_) = Array.fold_right (make_one_entry params_) mib.mind_packets (sigma, []) in
-  let debug b =
+  let _debug b =
+    let open Feedback in
     msg_info (Nameops.pr_id b.mind_entry_typename ++ str " : " ++ Termops.print_constr (it_mkProd_or_LetIn b.mind_entry_arity params_));
     let cs = List.combine b.mind_entry_consnames b.mind_entry_lc in
     let pr_constructor (id, tpe) =
@@ -243,8 +261,8 @@ let force_translate_inductive cat ind ids =
   in
 (*   List.iter debug bodies_; *)
   let make_param = function
-  | (na, None, t) -> (Nameops.out_name na, LocalAssum t)
-  | (na, Some body, _) -> (Nameops.out_name na, LocalDef body)
+    | RelDecl.LocalAssum (na,t) -> (Nameops.out_name na, LocalAssumEntry t)
+    | RelDecl.LocalDef (na,b,_) -> (Nameops.out_name na, LocalDefEntry b)
   in
   let params_ = List.map make_param params_ in
   let (_, uctx) = Evd.universe_context sigma in
@@ -267,7 +285,6 @@ let force_translate_inductive cat ind ids =
   List.map map_data (get_mind_globrefs (fst ind))
 
 let force_translate (obj, hom) gr ids =
-  let r = gr in
   let gr = Nametab.global gr in
   let obj = Universes.constr_of_global (Nametab.global obj) in
   let hom = Universes.constr_of_global (Nametab.global hom) in
@@ -282,7 +299,7 @@ let force_translate (obj, hom) gr ids =
   in
   let () = Lib.add_anonymous_leaf (in_translator ans) in
   let msg_translate (src, dst) =
-    Pp.msg_info (str "Global " ++ Printer.pr_global src ++
+    Feedback.msg_info (str "Global " ++ Printer.pr_global src ++
     str " has been translated as " ++ Printer.pr_global dst ++ str ".")
   in
   List.iter msg_translate ans
