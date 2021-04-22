@@ -1,5 +1,5 @@
--R theories/ Forcing
--I src/
+-R theories Forcing
+-I src
 
 src/fTranslate.ml
 src/fTranslate.mli
