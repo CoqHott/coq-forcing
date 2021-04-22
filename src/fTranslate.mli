@@ -20,4 +20,4 @@ val translate_type : ?toplevel:bool -> ?lift:int -> translator -> category ->
   Environ.env -> Evd.evar_map -> Constr.t -> Evd.evar_map * Constr.t
 
 val translate_context : ?toplevel:bool -> ?lift:int -> translator -> category ->
-  Environ.env -> Evd.evar_map -> Context.rel_context -> Evd.evar_map * Context.rel_context
+  Environ.env -> Evd.evar_map -> Context.Rel.t -> Evd.evar_map * Context.Rel.t

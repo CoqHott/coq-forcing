@@ -2,12 +2,12 @@
 
 ## Description
 
-This is a plugin for Coq v8.5 that implements the call-by-name forcing translation.
+This is a plugin for Coq v8.6 that implements the call-by-name forcing translation.
 The translation is described in this [draft](https://www.xn--pdrot-bsa.fr/articles/draft-forcing.pdf).
 
 ## Install
 
-You need Coq v8.5 development files. The ```COQBIN``` environment variable
+You need Coq v8.6 development files. The ```COQBIN``` environment variable
 should be pointing to the Coq binaries folder. Echoing ```make``` should be
 enough then.
 
