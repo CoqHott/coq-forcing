@@ -24,7 +24,11 @@ let classify_impl _ = Vernacexpr.(VtStartProof ("Classic",Doesn'tGuaranteeOpacit
 
 VERNAC COMMAND EXTEND ForcingImplementation CLASSIFIED BY classify_impl
 | [ "Forcing" "Definition" ident(id) ":" lconstr(typ) "using" global(obj) global(hom) ] ->
-  [ FPlugin.force_implement (obj, hom) id typ None ]
-| [ "Forcing" "Definition" ident(id) ":" lconstr(typ) "as" ident(id') "using" global(obj) global(hom) ] ->
-  [ FPlugin.force_implement (obj, hom) id typ (Some id') ]
+  [ FPlugin.force_implement (obj, hom) id typ None None ]
+| [ "Forcing" "Definition" ident(id) ":" lconstr(typ) "as" ident(id') "using" global(obj) global(hom)] ->
+  [ FPlugin.force_implement (obj, hom) id typ (Some id') None ]
+| [ "Forcing" "Definition" ident(id) ":" lconstr(typ) "using" global(obj) global(hom) "from" constr(c)] ->
+  [ FPlugin.force_implement (obj, hom) id typ None (Some c) ]
+| [ "Forcing" "Definition" ident(id) ":" lconstr(typ) "as" ident(id') "using" global(obj) global(hom) "from" constr(c)] ->
+  [ FPlugin.force_implement (obj, hom) id typ (Some id') (Some c) ]
 END
