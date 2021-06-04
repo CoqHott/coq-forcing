@@ -306,7 +306,7 @@ let force_translate (obj, hom) gr ids =
 
 (** Implementation in the forcing layer *)
 
-let force_implement (obj, hom) id typ idopt =
+let force_implement (obj, hom) id typ idopt fromopt =
   let env = Global.env () in
   let obj = Universes.constr_of_global (Nametab.global obj) in
   let hom = Universes.constr_of_global (Nametab.global hom) in
@@ -322,7 +322,13 @@ let force_implement (obj, hom) id typ idopt =
   let sigma = Evd.from_env env in
   let (typ, uctx) = Constrintern.interp_type env sigma typ in
   let sigma = Evd.from_ctx uctx in
-  let (sigma, typ_) = FTranslate.translate_type !translator cat env sigma typ in
+  let (sigma, typ_) = match fromopt with 
+    | None -> FTranslate.translate_type !translator cat env sigma typ
+    | Some from -> let (from, uctx) = Constrintern.interp_casted_constr env sigma from obj in 
+                    let sigma = Evd.from_ctx uctx in 
+                    let (sigma, typ_) = FTranslate.translate_type ~toplevel:false !translator cat env sigma typ in 
+                    sigma, Vars.subst1 from typ_ 
+  in
   let (sigma, _) = Typing.type_of env sigma typ_ in
   let hook _ dst =
     (** Declare the original term as an axiom *)
