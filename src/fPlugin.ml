@@ -50,45 +50,51 @@ let in_translator : translator_obj -> obj =
 let empty_translator = Refmap.empty
 
 let force_tac cat c =
-  Proofview.Goal.nf_enter { enter = begin fun gl ->
+  Proofview.Goal.nf_enter (begin fun gl ->
     let env = Proofview.Goal.env gl in
-    let sigma = Sigma.to_evar_map (Proofview.Goal.sigma gl) in
+    let sigma = Proofview.Goal.sigma gl in
+    let cat =
+      let (obj, hom) = cat in {
+          FTranslate.cat_obj = EConstr.to_constr sigma obj;
+          FTranslate.cat_hom = EConstr.to_constr sigma hom;
+        } in
+    let c = EConstr.to_constr sigma c in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
-    let sigma, _ = Typing.type_of env sigma ans in
+    let sigma, _ = Typing.type_of env sigma (EConstr.of_constr ans) in
     Proofview.Unsafe.tclEVARS sigma <*>
-    Tactics.letin_tac None Names.Name.Anonymous ans None Locusops.allHyps
-  end }
+    Tactics.letin_tac None Names.Name.Anonymous (EConstr.of_constr ans) None Locusops.allHyps
+  end)
 
 let force_solve cat c =
-  Proofview.Goal.nf_enter { enter = begin fun gl ->
+  Proofview.Goal.nf_enter (begin fun gl ->
     let env = Proofview.Goal.env gl in
-    let sigma = Sigma.to_evar_map (Proofview.Goal.sigma gl) in
+    let sigma = Proofview.Goal.sigma gl in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
     (*     msg_info (Termops.print_constr ans); *)
-    let sigma, _ = Typing.type_of env sigma ans in
+    let sigma, _ = Typing.type_of env sigma (EConstr.of_constr ans) in
     Proofview.Unsafe.tclEVARS sigma <*>
-    Refine.refine_casted {Sigma.run =  begin fun h -> Sigma.here ans h end }
-  end }
+    Refine.refine_casted ~typecheck:false (fun sigma -> (sigma,EConstr.of_constr ans))
+  end)
 
 let force_translate_constant cat cst ids =
   let id = match ids with
   | None -> translate_name (Nametab.basename_of_global (ConstRef cst))
   | Some [id] -> id
-  | Some _ -> error "Not the right number of provided names"
+  | Some _ -> user_err (Pp.str "Not the right number of provided names")
   in
   (** Translate the type *)
   let typ = Universes.unsafe_type_of_global (ConstRef cst) in
   let env = Global.env () in
   let sigma = Evd.from_env env in
   let (sigma, typ) = FTranslate.translate_type !translator cat env sigma typ in
-  let sigma, _ = Typing.type_of env sigma typ in
+  let sigma, _ = Typing.type_of env sigma (EConstr.of_constr typ) in
   let _uctx = Evd.evar_universe_context sigma in
   (** Define the term by tactic *)
   let body = Option.get (Global.body_of_constant cst) in
   let (sigma, body) = FTranslate.translate !translator cat env sigma body in
 (*   msg_info (Termops.print_constr body); *)
   let evdref = ref sigma in
-  let () = Typing.e_check env evdref body typ in
+  let () = Typing.e_check env evdref (EConstr.of_constr body) (EConstr.of_constr typ) in
   let sigma = !evdref in
   let (_, uctx) = Evd.universe_context sigma in
   let ce = Declare.definition_entry ~types:typ ~univs:uctx body in
@@ -156,7 +162,8 @@ let force_translate_inductive cat ind ids =
       let fold (sigma, ctxt) decl =
         let (x, o, t_) = RelDecl.to_tuple decl in
         let (sigma, tr_t_) = FTranslate.translate_type translator cat env sigma t_ in
-        (sigma, RelDecl.of_tuple (x, o, tr_t_) :: ctxt)
+        assert (o = None);
+        (sigma, RelDecl.LocalAssum (x, tr_t_) :: ctxt)
       in
       let (sigma, tr_arity) = List.fold_left fold (sigma, []) oib.mind_arity_ctxt in
       let open RelDecl in
@@ -181,8 +188,11 @@ let force_translate_inductive cat ind ids =
     let (sigma, s) =
       let evdref = ref sigma in
       let s =
-        if List.mem Sorts.InType body.mind_kelim then Evarutil.e_new_Type env evdref
-        else mkProp
+        if List.mem Sorts.InType body.mind_kelim then
+          let s = Evarutil.e_new_Type env evdref in
+          EConstr.to_constr !evdref s
+        else
+          mkProp
       in
       !evdref, s
     in
@@ -212,7 +222,7 @@ let force_translate_inductive cat ind ids =
             toplevel forcing condition, which is not the case here. *)
         FTranslate.translate_type ~toplevel:false translator cat envtr sigma typ in
       let typ_ = Vars.replace_vars substfn typ_ in 
-      let typ_ = Reductionops.nf_beta Evd.empty typ_ in
+      let typ_ = FAux.clos_norm_flags CClosure.beta env typ_ in 
       let typ_ = Vars.substn_vars (List.length params + 1) invsubst typ_ in
       let envtyp_ =
         Environ.push_rel (RelDecl.LocalAssum (Name (Nameops.add_suffix body.mind_typename "_f"),
@@ -220,8 +230,8 @@ let force_translate_inductive cat ind ids =
           env
       in
       let envtyp_ = Environ.push_rel_context params envtyp_ in
-      let sigma, ty = Typing.type_of envtyp_ sigma typ_ in                             
-      let sigma, b = Reductionops.infer_conv ~pb:Reduction.CUMUL envtyp_ sigma ty s in
+      let sigma, ty = Typing.type_of envtyp_ sigma (EConstr.of_constr typ_) in
+      let sigma, b = Reductionops.infer_conv ~pb:Reduction.CUMUL envtyp_ sigma ty (EConstr.of_constr s) in
       (sigma, eta_reduce typ_ :: lc_)
     in
     let typename, consnames = match ids with
@@ -230,7 +240,7 @@ let force_translate_inductive cat ind ids =
     | Some ids when List.length ids = Array.length body.mind_consnames + 1 ->
       (List.hd ids, List.tl ids)
     | _ ->
-      error "Not the right number of provided names"
+      user_err (Pp.str "Not the right number of provided names")
     in
     let (sigma, lc_) = Array.fold_left fold_lc (sigma, []) body.mind_user_lc in
     let body_ = {
@@ -240,6 +250,8 @@ let force_translate_inductive cat ind ids =
       mind_entry_consnames = consnames;
       mind_entry_lc = List.rev lc_;
     } in
+
+
     (sigma, body_ :: bodies_)
   in
   (** We proceed to the whole mutual block *)
@@ -252,10 +264,10 @@ let force_translate_inductive cat ind ids =
   let (sigma, bodies_) = Array.fold_right (make_one_entry params_) mib.mind_packets (sigma, []) in
   let _debug b =
     let open Feedback in
-    msg_info (Nameops.pr_id b.mind_entry_typename ++ str " : " ++ Termops.print_constr (it_mkProd_or_LetIn b.mind_entry_arity params_));
+    msg_info (Nameops.pr_id b.mind_entry_typename ++ str " : " ++ Printer.pr_constr (it_mkProd_or_LetIn b.mind_entry_arity params_));
     let cs = List.combine b.mind_entry_consnames b.mind_entry_lc in
     let pr_constructor (id, tpe) =
-      msg_info (Nameops.pr_id id ++ str " : " ++ Termops.print_constr tpe)
+      msg_info (Nameops.pr_id id ++ str " : " ++ Printer.pr_constr tpe)
     in
     List.iter pr_constructor cs
   in
@@ -265,13 +277,17 @@ let force_translate_inductive cat ind ids =
     | RelDecl.LocalDef (na,b,_) -> (Nameops.out_name na, LocalDefEntry b)
   in
   let params_ = List.map make_param params_ in
-  let (_, uctx) = Evd.universe_context sigma in
+  let uctx =
+    let (_,uctx) = Evd.universe_context sigma in
+    match mib.mind_universes with
+    | Monomorphic_ind _ -> Monomorphic_ind_entry uctx
+    | Polymorphic_ind _ -> (* TODO *) Polymorphic_ind_entry uctx
+    | Cumulative_ind cu -> (* TODO *) assert false in
   let mib_ = {
     mind_entry_record = record;
     mind_entry_finite = mib.mind_finite;
     mind_entry_params = params_;
     mind_entry_inds = bodies_;
-    mind_entry_polymorphic = mib.mind_polymorphic;
     mind_entry_universes = uctx;
     mind_entry_private = mib.mind_private;
   } in
@@ -295,7 +311,7 @@ let force_translate (obj, hom) gr ids =
   let ans = match gr with
   | ConstRef cst -> force_translate_constant cat cst ids
   | IndRef ind -> force_translate_inductive cat ind ids
-  | _ -> error "Translation not handled."
+  | _ -> user_err (Pp.str "Translation not handled.")
   in
   let () = Lib.add_anonymous_leaf (in_translator ans) in
   let msg_translate (src, dst) =
@@ -323,7 +339,7 @@ let force_implement (obj, hom) id typ idopt =
   let (typ, uctx) = Constrintern.interp_type env sigma typ in
   let sigma = Evd.from_ctx uctx in
   let (sigma, typ_) = FTranslate.translate_type !translator cat env sigma typ in
-  let (sigma, _) = Typing.type_of env sigma typ_ in
+  let (sigma, _) = Typing.type_of env sigma (EConstr.of_constr typ_) in
   let hook _ dst =
     (** Declare the original term as an axiom *)
     let param = (None, false, (typ, Evd.evar_context_universe_context uctx), None) in
@@ -333,8 +349,8 @@ let force_implement (obj, hom) id typ idopt =
     Lib.add_anonymous_leaf (in_translator [ConstRef cst, dst])
   in
   let hook ctx = Lemmas.mk_hook hook in
-  let sigma, _ = Typing.type_of env sigma typ_ in
-  let () = Lemmas.start_proof_univs id_ kind sigma typ_ hook in
+  let sigma, _ = Typing.type_of env sigma (EConstr.of_constr typ_) in
+  let () = Lemmas.start_proof_univs id_ kind sigma (EConstr.of_constr typ_) hook in
   ()
 
 (** Error handling *)

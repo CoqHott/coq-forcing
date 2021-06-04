@@ -3,10 +3,8 @@ open Term
 open Declarations
 open Environ
 open Globnames
-open Pp
 
 module RelDecl = Context.Rel.Declaration
-module NamedDecl = Context.Named.Declaration
 
 type translator = global_reference Refmap.t
 exception MissingGlobal of global_reference
@@ -238,8 +236,12 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
       (** For every translated index, the corresponding variable is added
           to the forcing context *)
        let (sigma, u_) = otranslate_boxed_type env fctx sigma u in
+       let (sigma, o_) = match o with
+         | None -> (sigma, None)
+         | Some o -> let (sigma, o) = otranslate_boxed env fctx sigma o in (sigma, Some o) in
        let fctx = add_variable fctx in
-       (sigma, fctx), RelDecl.of_tuple (na, o, u_)
+       let decl = match o_ with None -> RelDecl.LocalAssum (na, u_) | Some o_ -> RelDecl.LocalDef (na, o_, u_) in
+       (sigma, fctx), decl
      in
      let (sigma, fctx), args = CList.fold_map fold (sigma, fctx) args in
      let (sigma, self_) = otranslate_type env fctx sigma self in
@@ -250,9 +252,9 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
      let flags = let open CClosure in
        RedFlags.red_add betaiota RedFlags.fDELTA
      in
-     let r_ = Reductionops.clos_norm_flags flags env Evd.empty r_ in
+     let r_ = FAux.clos_norm_flags flags env r_ in
      let r_ = Vars.substnl [it_mkLambda_or_LetIn (mkVar selfid) ext] 1 (Vars.lift 1 r_) in
-     let r_ = Reductionops.nf_beta Evd.empty r_ in 
+     let r_ = FAux.clos_norm_flags CClosure.beta env r_ in
      let r_ = Vars.subst_var selfid r_ in
      let r_ = it_mkLambda_or_LetIn r_ (RelDecl.LocalAssum (na, self_) :: args) in
      (sigma, r_)       
@@ -338,14 +340,13 @@ let translate_context ?(toplevel = true) ?lift translator cat env sigma ctx =
   let empty = empty translator cat lift env in
   let fold decl (sigma, fctx, ctx_) =
     let (na, body, t) = RelDecl.to_tuple decl in
-    let (sigma, body_) = match body with
-    | None -> (sigma, None)
-    | Some _ -> assert false
-    in
     let (ext, tfctx) = extend fctx in
     let (sigma, t_) = otranslate_type env tfctx sigma t in
     let t_ = it_mkProd_or_LetIn t_ ext in
-    let decl_ = RelDecl.of_tuple (na, body_, t_) in
+    let (sigma, decl_) = match body with
+    | None -> (sigma, RelDecl.LocalAssum (na, t_))
+    | Some _ -> assert false
+    in
     let fctx = add_variable fctx in
     (sigma, fctx, decl_ :: ctx_)
   in

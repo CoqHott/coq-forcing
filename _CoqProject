@@ -1,6 +1,7 @@
 -R theories Forcing
 -I src
 
+src/fAux.ml
 src/fTranslate.ml
 src/fTranslate.mli
 src/fPlugin.ml
