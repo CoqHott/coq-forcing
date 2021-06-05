@@ -24,7 +24,7 @@ let translate_name id =
 let translator : FTranslate.translator ref =
   Summary.ref ~name:"Forcing Global Table" Refmap.empty
 
-type translator_obj = (global_reference * global_reference) list
+type translator_obj = (GlobRef.t * GlobRef.t) list
 
 let add_translator translator l =
   List.fold_left (fun accu (src, dst) -> Refmap.add src dst accu) translator l
@@ -94,9 +94,7 @@ let force_translate_constant cat cst ids =
   let body, _ = Option.get (Global.body_of_constant cst) in
   let (sigma, body) = FTranslate.translate !translator cat env sigma body in
 (*  Pp.pp_with Format.err_formatter (Printer.pr_constr_env env sigma body);*)
-  let evdref = ref sigma in
-  let () = Typing.e_check env evdref (EConstr.of_constr body) (EConstr.of_constr typ) in
-  let sigma = !evdref in
+  let sigma = Typing.check env sigma (EConstr.of_constr body) (EConstr.of_constr typ) in
   let uctx = Evd.const_univ_entry ~poly:false sigma in
   let ce = Declare.definition_entry ~types:typ ~univs:uctx body in
   let cd = Entries.DefinitionEntry ce in
@@ -187,15 +185,11 @@ let force_translate_inductive cat ind ids =
     in
     (** Heuristic for the return type. Can we do better? *)
     let (sigma, s) =
-      let evdref = ref sigma in
-      let s =
-        if List.mem Sorts.InType body.mind_kelim then
-          let s = Evarutil.e_new_Type env evdref in
-          EConstr.to_constr !evdref s
-        else
-          mkProp
-      in
-      !evdref, s
+      if List.mem Sorts.InType body.mind_kelim then
+        let sigma, s = Evarutil.new_Type sigma in
+        (sigma, EConstr.to_constr sigma s)
+      else
+        (sigma, mkProp)
     in
     let (sigma, arity) =
       (** On obtient l'arité de l'inductif en traduisant le type de chaque indice
@@ -232,7 +226,9 @@ let force_translate_inductive cat ind ids =
       in
       let envtyp_ = Environ.push_rel_context params envtyp_ in
       let sigma, ty = Typing.type_of envtyp_ sigma (EConstr.of_constr typ_) in
-      let sigma, b = Reductionops.infer_conv ~pb:Reduction.CUMUL envtyp_ sigma ty (EConstr.of_constr s) in
+      let sigma = match Reductionops.infer_conv ~pb:Reduction.CUMUL envtyp_ sigma ty (EConstr.of_constr s) with
+        | None -> assert false 
+        | Some sigma -> sigma in
       (sigma, eta_reduce typ_ :: lc_)
     in
     let typename, consnames = match ids with
@@ -257,9 +253,9 @@ let force_translate_inductive cat ind ids =
   in
   (** We proceed to the whole mutual block *)
   let record = match mib.mind_record with
-  | None -> None
-  | Some None -> Some None
-  | Some (Some (id, _, _)) -> Some (Some (translate_name id))
+  | NotRecord -> None
+  | FakeRecord -> Some None
+  | PrimRecord info -> Some (Some (Array.map pi1 info))
   in
   let (sigma, params_) = FTranslate.translate_context translator cat env sigma mib.mind_params_ctxt in
   let (sigma, bodies_) = Array.fold_right (make_one_entry params_) mib.mind_packets (sigma, []) in
@@ -302,8 +298,8 @@ let force_translate_inductive cat ind ids =
 
 let force_translate (obj, hom) gr ids =
   let gr = Nametab.global gr in
-  let obj = Universes.constr_of_global (Nametab.global obj) in
-  let hom = Universes.constr_of_global (Nametab.global hom) in
+  let obj = UnivGen.constr_of_global (Nametab.global obj) in
+  let hom = UnivGen.constr_of_global (Nametab.global hom) in
   let cat = {
     FTranslate.cat_obj = obj;
     FTranslate.cat_hom = hom;
@@ -324,8 +320,8 @@ let force_translate (obj, hom) gr ids =
 
 let force_implement (obj, hom) id typ idopt =
   let env = Global.env () in
-  let obj = Universes.constr_of_global (Nametab.global obj) in
-  let hom = Universes.constr_of_global (Nametab.global hom) in
+  let obj = UnivGen.constr_of_global (Nametab.global obj) in
+  let hom = UnivGen.constr_of_global (Nametab.global hom) in
   let cat = {
     FTranslate.cat_obj = obj;
     FTranslate.cat_hom = hom;

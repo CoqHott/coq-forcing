@@ -7,8 +7,8 @@ open Globnames
 
 module RelDecl = Context.Rel.Declaration
 
-type translator = global_reference Refmap.t
-exception MissingGlobal of global_reference
+type translator = GlobRef.t Refmap.t
+exception MissingGlobal of GlobRef.t
 
 (** Yoneda embedding *)
 
@@ -152,6 +152,7 @@ let apply_global env sigma gr u fctx =
     with Not_found -> raise (MissingGlobal gr)
   in
   let (sigma, c) = Evd.fresh_global env sigma p' in
+  let c = EConstr.to_constr sigma c in
   let last = last_condition fctx in
   match gr with
   | IndRef _ -> assert false
