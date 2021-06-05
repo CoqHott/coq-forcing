@@ -1,11 +1,12 @@
 -R theories Forcing
 -I src
 
+src/fAux.ml
 src/fTranslate.ml
 src/fTranslate.mli
 src/fPlugin.ml
 src/fPlugin.mli
-src/g_forcing.ml4
+src/g_forcing.mlg
 src/forcing.mllib
 
 theories/Forcing.v

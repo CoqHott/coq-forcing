@@ -1,15 +1,13 @@
 open Names
 open Term
+open Constr
 open Declarations
 open Environ
-open Globnames
-open Pp
 
 module RelDecl = Context.Rel.Declaration
-module NamedDecl = Context.Named.Declaration
 
-type translator = global_reference Refmap.t
-exception MissingGlobal of global_reference
+type translator = GlobRef.t GlobRef.Map.t
+exception MissingGlobal of GlobRef.t
 
 (** Yoneda embedding *)
 
@@ -20,13 +18,13 @@ type category = {
   (** Morphisms. Must be of type [cat_obj -> cat_obj -> Type]. *)
 }
 
-let obj_name = Name (Id.of_string "R")
-let knt_name = Name (Id.of_string "k")
+let obj_name = Context.nameR (Id.of_string "R")
+let knt_name = Context.nameR (Id.of_string "k")
 
 let hom cat a b =
   let lft = mkApp (cat.cat_hom, [| Vars.lift 1 b; mkRel 1 |]) in
   let rgt = mkApp (cat.cat_hom, [| Vars.lift 2 a; mkRel 2 |]) in
-  let arr = mkArrow lft rgt in
+  let arr = Term.mkArrow lft Sorts.Relevant rgt in
   mkProd (obj_name, cat.cat_obj, arr)
 
 let refl cat a =
@@ -71,8 +69,8 @@ type forcing_context = {
 
 (** We assume that there is a hidden topmost variable [p : Obj] in the context *)
 
-let pos_name = Name (Id.of_string "p")
-let hom_name = Name (Id.of_string "α")
+let pos_name = Context.nameR (Id.of_string "p")
+let hom_name = Context.nameR (Id.of_string "α")
 
 let dummy = mkProp
 
@@ -131,36 +129,32 @@ let translate_var fctx n =
   let m = get_var_shift n fctx in
   mkApp (mkRel m, [| p; f |])
 
-let rec untranslate_rel n c = match Constr.kind c with
-| App (t, args) when isRel t && Array.length args >= 2 ->
-  c
-| _ -> Constr.map_with_binders succ untranslate_rel n c
-
 let get_inductive fctx ind =
-  let gr = IndRef ind in
+  let gr = GlobRef.IndRef ind in
   let gr_ =
-    try Refmap.find gr fctx.translator
+    try GlobRef.Map.find gr fctx.translator
     with Not_found -> raise (MissingGlobal gr)
   in
   match gr_ with
-  | IndRef ind_ -> ind_
+  | GlobRef.IndRef ind_ -> ind_
   | _ -> assert false
 
 let apply_global env sigma gr u fctx =
-  (** FIXME *)
+  (* FIXME *)
   let p' =
-    try Refmap.find gr fctx.translator
+    try GlobRef.Map.find gr fctx.translator
     with Not_found -> raise (MissingGlobal gr)
   in
   let (sigma, c) = Evd.fresh_global env sigma p' in
+  let c = EConstr.to_constr sigma c in
   let last = last_condition fctx in
   match gr with
-  | IndRef _ -> assert false
+  | GlobRef.IndRef _ -> assert false
   | _ -> (sigma, mkApp (c, [| mkRel last |]))
 
 (** Forcing translation core *)
 
-let rec otranslate env fctx sigma c = match kind_of_term c with
+let rec otranslate env fctx sigma c = match kind c with
 | Rel n ->
   let ans = translate_var fctx n in
   (sigma, ans)
@@ -182,19 +176,19 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
   (sigma, ans)
 | Prod (na, t, u) ->
   let (ext0, fctx) = extend fctx in
-  (** Translation of t *)
+  (* Translation of t *)
   let (sigma, t_) = otranslate_boxed_type env fctx sigma t in
-  (** Translation of u *)
+  (* Translation of u *)
   let ufctx = add_variable fctx in
   let (sigma, u_) = otranslate_type env ufctx sigma u in
-  (** Result *)
+  (* Result *)
   let ans = mkProd (na, t_, u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
   (sigma, lam)
 | Lambda (na, t, u) ->
-  (** Translation of t *)
+  (* Translation of t *)
   let (sigma, t_) = otranslate_boxed_type env fctx sigma t in
-  (** Translation of u *)
+  (* Translation of u *)
   let ufctx = add_variable fctx in
   let (sigma, u_) = otranslate env ufctx sigma u in
   let ans = mkLambda (na, t_, u_) in
@@ -211,23 +205,23 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 | App (t, args) ->
   let (sigma, t_) = otranslate env fctx sigma t in
   let fold sigma u = otranslate_boxed env fctx sigma u in
-  let (sigma, args_) = CArray.fold_map fold sigma args in
+  let (sigma, args_) = CArray.fold_left_map fold sigma args in
   let app = mkApp (t_, args_) in
   (sigma, app)
 | Var id ->
-  apply_global env sigma (VarRef id) Univ.Instance.empty fctx
+  apply_global env sigma (GlobRef.VarRef id) Univ.Instance.empty fctx
 | Const (p, u) ->
-  apply_global env sigma (ConstRef p) u fctx
+  apply_global env sigma (GlobRef.ConstRef p) u fctx
 | Ind (ind, u) ->
   otranslate_ind env fctx sigma ind u [||]
 | Construct (c, u) ->
-  apply_global env sigma (ConstructRef c) u fctx
-| Case (ci, r, c, p) ->
+  apply_global env sigma (GlobRef.ConstructRef c) u fctx
+| Case (ci, r, iv, c, p) ->
    let ind_ = get_inductive fctx ci.ci_ind in
-   let ci_ = Inductiveops.make_case_info env ind_ ci.ci_pp_info.style in
+   let ci_ = Inductiveops.make_case_info env ind_ Sorts.Relevant ci.ci_pp_info.style in
    let (sigma, c_) = otranslate env fctx sigma c in
    let fix_return_clause env fctx sigma r =
-     (** The return clause structure is fun indexes self => Q
+     (* The return clause structure is fun indexes self => Q
          All indices must be boxed, but self only needs to be translated *)
      let (args, r_) = decompose_lam_assum r in
      let (na, self, args) = match args with
@@ -235,13 +229,17 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
        | _ -> assert false in
      let fold (sigma, fctx) decl =
        let (na, o, u) = RelDecl.to_tuple decl in
-      (** For every translated index, the corresponding variable is added
+      (* For every translated index, the corresponding variable is added
           to the forcing context *)
        let (sigma, u_) = otranslate_boxed_type env fctx sigma u in
+       let (sigma, o_) = match o with
+         | None -> (sigma, None)
+         | Some o -> let (sigma, o) = otranslate_boxed env fctx sigma o in (sigma, Some o) in
        let fctx = add_variable fctx in
-       (sigma, fctx), RelDecl.of_tuple (na, o, u_)
+       let decl = match o_ with None -> RelDecl.LocalAssum (na, u_) | Some o_ -> RelDecl.LocalDef (na, o_, u_) in
+       (sigma, fctx), decl
      in
-     let (sigma, fctx), args = CList.fold_map fold (sigma, fctx) args in
+     let (sigma, fctx), args = CList.fold_left_map fold (sigma, fctx) args in
      let (sigma, self_) = otranslate_type env fctx sigma self in
      let fctx_ = add_variable fctx in
      let (sigma, r_) = otranslate_type env fctx_ sigma r_ in
@@ -250,29 +248,34 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
      let flags = let open CClosure in
        RedFlags.red_add betaiota RedFlags.fDELTA
      in
-     let r_ = Reductionops.clos_norm_flags flags env Evd.empty r_ in
+     let r_ = FAux.clos_norm_flags flags env r_ in
      let r_ = Vars.substnl [it_mkLambda_or_LetIn (mkVar selfid) ext] 1 (Vars.lift 1 r_) in
-     let r_ = Reductionops.nf_beta Evd.empty r_ in 
+     let r_ = FAux.clos_norm_flags CClosure.beta env r_ in
      let r_ = Vars.subst_var selfid r_ in
      let r_ = it_mkLambda_or_LetIn r_ (RelDecl.LocalAssum (na, self_) :: args) in
      (sigma, r_)       
    in
    let (sigma, r_) = fix_return_clause env fctx sigma r in
    let fold sigma u = otranslate env fctx sigma u in
-   let (sigma, p_) = CArray.fold_map fold sigma p in
-   (sigma, mkCase (ci_, r_, c_, p_))
+   let (sigma, p_) = CArray.fold_left_map fold sigma p in
+   (* Do not support "UIP" *)
+   let iv_ = NoInvert in
+   (sigma, mkCase (ci_, r_, iv_, c_, p_))
 | Fix f -> assert false
 | CoFix f -> assert false
 | Proj (p, c) -> assert false
 | Meta _ -> assert false
 | Evar _ -> assert false
+| Int _ -> assert false
+| Float _ -> assert false
+| Array _ -> assert false
 
 and otranslate_ind env fctx sigma ind u args =
   let ind_ = get_inductive fctx ind in
   let (_, oib) = Inductive.lookup_mind_specif env ind_ in
   let fold sigma u = otranslate_boxed env fctx sigma u in
-  let (sigma, args_) = CArray.fold_map fold sigma args in
-  (** First parameter is the toplevel forcing condition *)
+  let (sigma, args_) = CArray.fold_left_map fold sigma args in
+  (* First parameter is the toplevel forcing condition *)
   let _, paramtyp = CList.sep_last oib.mind_arity_ctxt in
   let nparams = List.length paramtyp in
   let last = last_condition fctx in
@@ -338,14 +341,13 @@ let translate_context ?(toplevel = true) ?lift translator cat env sigma ctx =
   let empty = empty translator cat lift env in
   let fold decl (sigma, fctx, ctx_) =
     let (na, body, t) = RelDecl.to_tuple decl in
-    let (sigma, body_) = match body with
-    | None -> (sigma, None)
-    | Some _ -> assert false
-    in
     let (ext, tfctx) = extend fctx in
     let (sigma, t_) = otranslate_type env tfctx sigma t in
     let t_ = it_mkProd_or_LetIn t_ ext in
-    let decl_ = RelDecl.of_tuple (na, body_, t_) in
+    let (sigma, decl_) = match body with
+    | None -> (sigma, RelDecl.LocalAssum (na, t_))
+    | Some _ -> assert false
+    in
     let fctx = add_variable fctx in
     (sigma, fctx, decl_ :: ctx_)
   in

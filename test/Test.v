@@ -28,3 +28,6 @@ _force (fun A n (v : vect A n) =>
           end).
 exact I.
 Qed.
+
+Forcing Translate and using Obj Hom.
+Forcing Translate iff using Obj Hom.
