@@ -31,7 +31,7 @@ let cache_translator (_, l) =
   translator := add_translator !translator l
 
 let load_translator _ l = cache_translator l
-let open_translator _ l = cache_translator l
+let open_translator _ _ l = cache_translator l
 
 let in_translator : translator_obj -> obj =
   declare_object { (default_object "FORCING TRANSLATOR") with
@@ -139,7 +139,7 @@ let force_translate_inductive cat ind ids =
   let substind =
     Array.map_to_list (fun oib ->
         NamedDecl.LocalAssum (Context.annotR oib.mind_typename,
-			      Inductive.type_of_inductive env ((mib, oib), Univ.Instance.empty)))
+			      Inductive.type_of_inductive ((mib, oib), Univ.Instance.empty)))
       mib.mind_packets
   in
   let invsubst = List.map NamedDecl.get_id substind in
@@ -174,8 +174,6 @@ let force_translate_inductive cat ind ids =
     Array.fold_left fold (sigma, []) mib.mind_packets
   in
   let make_one_entry params body (sigma, bodies_) =
-    (* For template polymorphism, one would need to maintain a substitution of universes *)
-    let template = false in
     (* Heuristic for the return type. Can we do better? *)
     let (sigma, s) =
       if Sorts.family_leq Sorts.InType body.mind_kelim then
@@ -236,14 +234,13 @@ let force_translate_inductive cat ind ids =
     let body_ = {
       mind_entry_typename = typename;
       mind_entry_arity = arity;
-      mind_entry_template = template;
       mind_entry_consnames = consnames;
       mind_entry_lc = List.rev lc_;
     } in
-
-
     (sigma, body_ :: bodies_)
   in
+  (* For template polymorphism, one would need to maintain a substitution of universes *)
+  let template = false in
   (* We proceed to the whole mutual block *)
   let record = match mib.mind_record with
   | NotRecord -> None
@@ -272,7 +269,8 @@ let force_translate_inductive cat ind ids =
     mind_entry_params = params_;
     mind_entry_inds = bodies_;
     mind_entry_universes = uctx;
-    mind_entry_variance = mib.mind_variance;
+    mind_entry_template = template;
+    mind_entry_cumulative = Option.has_some mib.mind_variance;
     mind_entry_private = mib.mind_private;
   } in
   let mib_ = DeclareInd.declare_mutual_inductive_with_eliminations mib_ UnivNames.empty_binders [] in
@@ -318,14 +316,14 @@ let force_implement (obj, hom) id typ idopt =
   | Some id -> id
   in
   let kind = IsDefinition Definition in
-  let scope = DeclareDef.Global Declare.ImportDefaultBehavior in 
+  let scope = Declare.Global Declare.ImportDefaultBehavior in 
   let sigma = Evd.from_env env in
   let (typ, uctx) = Constrintern.interp_type env sigma typ in
   let sigma = Evd.from_ctx uctx in
   let typ = EConstr.to_constr sigma typ in
   let (sigma, typ_) = FTranslate.translate_type !translator cat env sigma typ in
   let (sigma, _) = Typing.type_of env sigma (EConstr.of_constr typ_) in
-  let hook = DeclareDef.Hook.(make (function S.{uctx;dref} ->
+  let hook = Declare.Hook.(make (function S.{uctx;dref} ->
     (* Declare the original term as an axiom *)
     let param = (None, (typ, Entries.Monomorphic_entry (UState.context_set uctx)), None) in
     let cb = Declare.ParameterEntry param in
@@ -342,6 +340,6 @@ let force_implement (obj, hom) id typ idopt =
 let _ = register_handler begin function
 | FTranslate.MissingGlobal gr ->
   let ref = Nametab.shortest_qualid_of_global Id.Set.empty gr in
-  str "No forcing translation for global " ++ Libnames.pr_qualid ref ++ str "."
-| _ -> raise Unhandled
+  Some (str "No forcing translation for global " ++ Libnames.pr_qualid ref ++ str ".")
+| _ -> None
 end
