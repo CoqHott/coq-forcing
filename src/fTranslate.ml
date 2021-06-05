@@ -7,7 +7,7 @@ open Globnames
 
 module RelDecl = Context.Rel.Declaration
 
-type translator = GlobRef.t Refmap.t
+type translator = GlobRef.t GlobRef.Map.t
 exception MissingGlobal of GlobRef.t
 
 (** Yoneda embedding *)
@@ -19,13 +19,13 @@ type category = {
   (** Morphisms. Must be of type [cat_obj -> cat_obj -> Type]. *)
 }
 
-let obj_name = Name (Id.of_string "R")
-let knt_name = Name (Id.of_string "k")
+let obj_name = Context.nameR (Id.of_string "R")
+let knt_name = Context.nameR (Id.of_string "k")
 
 let hom cat a b =
   let lft = mkApp (cat.cat_hom, [| Vars.lift 1 b; mkRel 1 |]) in
   let rgt = mkApp (cat.cat_hom, [| Vars.lift 2 a; mkRel 2 |]) in
-  let arr = Term.mkArrow lft rgt in
+  let arr = Term.mkArrow lft Sorts.Relevant rgt in
   mkProd (obj_name, cat.cat_obj, arr)
 
 let refl cat a =
@@ -70,8 +70,8 @@ type forcing_context = {
 
 (** We assume that there is a hidden topmost variable [p : Obj] in the context *)
 
-let pos_name = Name (Id.of_string "p")
-let hom_name = Name (Id.of_string "α")
+let pos_name = Context.nameR (Id.of_string "p")
+let hom_name = Context.nameR (Id.of_string "α")
 
 let dummy = mkProp
 
@@ -130,15 +130,10 @@ let translate_var fctx n =
   let m = get_var_shift n fctx in
   mkApp (mkRel m, [| p; f |])
 
-let rec untranslate_rel n c = match Constr.kind c with
-| App (t, args) when isRel t && Array.length args >= 2 ->
-  c
-| _ -> Constr.map_with_binders succ untranslate_rel n c
-
 let get_inductive fctx ind =
   let gr = IndRef ind in
   let gr_ =
-    try Refmap.find gr fctx.translator
+    try GlobRef.Map.find gr fctx.translator
     with Not_found -> raise (MissingGlobal gr)
   in
   match gr_ with
@@ -146,9 +141,9 @@ let get_inductive fctx ind =
   | _ -> assert false
 
 let apply_global env sigma gr u fctx =
-  (** FIXME *)
+  (* FIXME *)
   let p' =
-    try Refmap.find gr fctx.translator
+    try GlobRef.Map.find gr fctx.translator
     with Not_found -> raise (MissingGlobal gr)
   in
   let (sigma, c) = Evd.fresh_global env sigma p' in
@@ -182,19 +177,19 @@ let rec otranslate env fctx sigma c = match kind c with
   (sigma, ans)
 | Prod (na, t, u) ->
   let (ext0, fctx) = extend fctx in
-  (** Translation of t *)
+  (* Translation of t *)
   let (sigma, t_) = otranslate_boxed_type env fctx sigma t in
-  (** Translation of u *)
+  (* Translation of u *)
   let ufctx = add_variable fctx in
   let (sigma, u_) = otranslate_type env ufctx sigma u in
-  (** Result *)
+  (* Result *)
   let ans = mkProd (na, t_, u_) in
   let lam = it_mkLambda_or_LetIn ans ext0 in
   (sigma, lam)
 | Lambda (na, t, u) ->
-  (** Translation of t *)
+  (* Translation of t *)
   let (sigma, t_) = otranslate_boxed_type env fctx sigma t in
-  (** Translation of u *)
+  (* Translation of u *)
   let ufctx = add_variable fctx in
   let (sigma, u_) = otranslate env ufctx sigma u in
   let ans = mkLambda (na, t_, u_) in
@@ -224,10 +219,10 @@ let rec otranslate env fctx sigma c = match kind c with
   apply_global env sigma (ConstructRef c) u fctx
 | Case (ci, r, c, p) ->
    let ind_ = get_inductive fctx ci.ci_ind in
-   let ci_ = Inductiveops.make_case_info env ind_ ci.ci_pp_info.style in
+   let ci_ = Inductiveops.make_case_info env ind_ Sorts.Relevant ci.ci_pp_info.style in
    let (sigma, c_) = otranslate env fctx sigma c in
    let fix_return_clause env fctx sigma r =
-     (** The return clause structure is fun indexes self => Q
+     (* The return clause structure is fun indexes self => Q
          All indices must be boxed, but self only needs to be translated *)
      let (args, r_) = decompose_lam_assum r in
      let (na, self, args) = match args with
@@ -235,7 +230,7 @@ let rec otranslate env fctx sigma c = match kind c with
        | _ -> assert false in
      let fold (sigma, fctx) decl =
        let (na, o, u) = RelDecl.to_tuple decl in
-      (** For every translated index, the corresponding variable is added
+      (* For every translated index, the corresponding variable is added
           to the forcing context *)
        let (sigma, u_) = otranslate_boxed_type env fctx sigma u in
        let (sigma, o_) = match o with
@@ -270,13 +265,14 @@ let rec otranslate env fctx sigma c = match kind c with
 | Proj (p, c) -> assert false
 | Meta _ -> assert false
 | Evar _ -> assert false
+| Int _ -> assert false
 
 and otranslate_ind env fctx sigma ind u args =
   let ind_ = get_inductive fctx ind in
   let (_, oib) = Inductive.lookup_mind_specif env ind_ in
   let fold sigma u = otranslate_boxed env fctx sigma u in
   let (sigma, args_) = CArray.fold_left_map fold sigma args in
-  (** First parameter is the toplevel forcing condition *)
+  (* First parameter is the toplevel forcing condition *)
   let _, paramtyp = CList.sep_last oib.mind_arity_ctxt in
   let nparams = List.length paramtyp in
   let last = last_condition fctx in

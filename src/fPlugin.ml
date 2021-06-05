@@ -2,7 +2,6 @@ open CErrors
 open Pp
 open Util
 open Names
-open Nameops
 open Term
 open Constr
 open Decl_kinds
@@ -22,21 +21,18 @@ let translate_name id =
 (** Record of translation between globals *)
 
 let translator : FTranslate.translator ref =
-  Summary.ref ~name:"Forcing Global Table" Refmap.empty
+  Summary.ref ~name:"Forcing Global Table" GlobRef.Map.empty
 
 type translator_obj = (GlobRef.t * GlobRef.t) list
 
 let add_translator translator l =
-  List.fold_left (fun accu (src, dst) -> Refmap.add src dst accu) translator l
+  List.fold_left (fun accu (src, dst) -> GlobRef.Map.add src dst accu) translator l
 							    
 let cache_translator (_, l) =
   translator := add_translator !translator l
 
 let load_translator _ l = cache_translator l
 let open_translator _ l = cache_translator l
-let subst_translator (subst, l) =
-  let map (src, dst) = (subst_global_reference subst src, subst_global_reference subst dst) in
-  List.map map l
 
 let in_translator : translator_obj -> obj =
   declare_object { (default_object "FORCING TRANSLATOR") with
@@ -49,10 +45,8 @@ let in_translator : translator_obj -> obj =
 
 (** Tactic *)
 
-let empty_translator = Refmap.empty
-
 let force_tac cat c =
-  Proofview.Goal.nf_enter (begin fun gl ->
+  Proofview.Goal.enter (begin fun gl ->
     let env = Proofview.Goal.env gl in
     let sigma = Proofview.Goal.sigma gl in
     let cat =
@@ -67,16 +61,18 @@ let force_tac cat c =
     Tactics.letin_tac None Names.Name.Anonymous (EConstr.of_constr ans) None Locusops.allHyps
   end)
 
+(*
 let force_solve cat c =
-  Proofview.Goal.nf_enter (begin fun gl ->
+  Proofview.Goal.enter (begin fun gl ->
     let env = Proofview.Goal.env gl in
     let sigma = Proofview.Goal.sigma gl in
     let (sigma, ans) = FTranslate.translate !translator cat env sigma c in
     (*     msg_info (Termops.print_constr ans); *)
     let sigma, _ = Typing.type_of env sigma (EConstr.of_constr ans) in
     Proofview.Unsafe.tclEVARS sigma <*>
-    Refine.refine_casted ~typecheck:false (fun sigma -> (sigma,EConstr.of_constr ans))
+    FAux.refine_casted ~typecheck:false (fun sigma -> (sigma,EConstr.of_constr ans))
   end)
+*)
 
 let force_translate_constant cat cst ids =
   let id = match ids with
@@ -84,18 +80,18 @@ let force_translate_constant cat cst ids =
   | Some [id] -> id
   | Some _ -> user_err (Pp.str "Not the right number of provided names")
   in
-  (** Translate the type *)
+  (* Translate the type *)
   let env = Global.env () in
   let sigma = Evd.from_env env in
-  let typ, _uctx = Global.type_of_global_in_context env (ConstRef cst) in
+  let typ, _uctx = Typeops.type_of_global_in_context env (ConstRef cst) in
   let (sigma, typ) = FTranslate.translate_type !translator cat env sigma typ in
   let sigma, _ = Typing.type_of env sigma (EConstr.of_constr typ) in
-  (** Define the term by tactic *)
+  (* Define the term by tactic *)
   let body, _ = Option.get (Global.body_of_constant cst) in
   let (sigma, body) = FTranslate.translate !translator cat env sigma body in
 (*  Pp.pp_with Format.err_formatter (Printer.pr_constr_env env sigma body);*)
   let sigma = Typing.check env sigma (EConstr.of_constr body) (EConstr.of_constr typ) in
-  let uctx = Evd.const_univ_entry ~poly:false sigma in
+  let uctx = Evd.univ_entry ~poly:false sigma in
   let ce = Declare.definition_entry ~types:typ ~univs:uctx body in
   let cd = Entries.DefinitionEntry ce in
   let decl = (cd, IsProof Lemma) in
@@ -132,25 +128,25 @@ let get_mind_globrefs mind =
   List.flatten l
 
 let force_translate_inductive cat ind ids =
-  (** From a kernel inductive body construct an entry for the inductive. There
-      are slight mismatches in the representation, in particular in the handling
-      of contexts. See {!Declarations} and {!Entries}. *)
+  (* From a kernel inductive body construct an entry for the inductive. There
+     are slight mismatches in the representation, in particular in the handling
+     of contexts. See {!Declarations} and {!Entries}. *)
   let open Declarations in
   let open Entries in
   let env = Global.env () in
   let (mib, _) = Global.lookup_inductive ind in
   let nparams = List.length mib.mind_params_ctxt in
-  (** For each block in the inductive we build the translation *)
+  (* For each block in the inductive we build the translation *)
   let substind =
     Array.map_to_list (fun oib ->
-        NamedDecl.LocalAssum (oib.mind_typename,
+        NamedDecl.LocalAssum (Context.annotR oib.mind_typename,
 			      Inductive.type_of_inductive env ((mib, oib), Univ.Instance.empty)))
       mib.mind_packets
   in
   let invsubst = List.map NamedDecl.get_id substind in
   let translator = add_translator !translator (List.map (fun id -> VarRef id, VarRef id) invsubst) in
-(** À chaque inductif I on associe une fonction λp.λparams.λindices.λ(qα), 
-    (mkVar I) p params indices *)
+  (* À chaque inductif I on associe une fonction λp.λparams.λindices.λ(qα), 
+     (mkVar I) p params indices *)
   let sigma = Evd.from_env env in
   let (sigma, substfn) = 
     let fn_oib oib = 
@@ -167,10 +163,10 @@ let force_translate_inductive cat ind ids =
       let (sigma, tr_arity) = List.fold_left fold (sigma, []) oib.mind_arity_ctxt in
       let open RelDecl in
       (sigma, it_mkLambda_or_LetIn fnbody
-         ([LocalAssum (Anonymous, FTranslate.hom cat (mkRel 3) (mkRel (3 + narityctxt)));
-           LocalAssum (Anonymous, obj)]
+         ([LocalAssum (Context.anonR, FTranslate.hom cat (mkRel 3) (mkRel (3 + narityctxt)));
+           LocalAssum (Context.anonR, obj)]
           @ tr_arity
-          @ [LocalAssum (Anonymous, obj)]))
+          @ [LocalAssum (Context.anonR, obj)]))
     in
     let fold (sigma, acc) oib =
       let (sigma, fn) = fn_oib oib in
@@ -183,7 +179,7 @@ let force_translate_inductive cat ind ids =
     | RegularArity _ -> false
     | TemplateArity _ -> true
     in
-    (** Heuristic for the return type. Can we do better? *)
+    (* Heuristic for the return type. Can we do better? *)
     let (sigma, s) =
       if List.mem Sorts.InType body.mind_kelim then
         let sigma, s = Evarutil.new_Type sigma in
@@ -192,35 +188,35 @@ let force_translate_inductive cat ind ids =
         (sigma, mkProp)
     in
     let (sigma, arity) =
-      (** On obtient l'arité de l'inductif en traduisant le type de chaque indice
-          i.e : si I ... : (i1 : A1),...,(in : An),s alors l'arité traduite 
-          est (i1 : [A1])...(in : [An]), s *)
+      (* On obtient l'arité de l'inductif en traduisant le type de chaque indice
+         i.e : si I ... : (i1 : A1),...,(in : An),s alors l'arité traduite 
+         est (i1 : [A1])...(in : [An]), s *)
       let nindexes = List.length body.mind_arity_ctxt - nparams in
       let ctx = List.firstn nindexes body.mind_arity_ctxt in
       let env' = Environ.push_rel_context mib.mind_params_ctxt env in
       let a = it_mkProd_or_LetIn s ctx in
       let (sigma, a) = FTranslate.translate_type ~toplevel:false translator cat env' sigma a in
-      (** En traduisant le type, le codomaine a aussi été traduit. On le remplace par le codomaine
-          originel *)
+      (* En traduisant le type, le codomaine a aussi été traduit. On le remplace par le codomaine
+         originel *)
       let (a, _) = decompose_prod_n nindexes a in 
       (sigma, compose_prod a s)
     in
     let fold_lc (sigma, lc_) typ =
-      (** We exploit the fact that the translation actually does not depend on
-          the rel_context of the environment except for its length. *)
+      (* We exploit the fact that the translation actually does not depend on
+         the rel_context of the environment except for its length. *)
       let env' = Environ.push_named_context substind env in
       let envtr = Environ.push_rel_context (CList.tl params) env' in
       let _, typ = decompose_prod_n nparams typ in
       let typ = Vars.substnl (List.map mkVar invsubst) nparams typ in
       let (sigma, typ_) =
-        (** The translation assumes that the first introduced variable is the
-            toplevel forcing condition, which is not the case here. *)
+        (* The translation assumes that the first introduced variable is the
+           toplevel forcing condition, which is not the case here. *)
         FTranslate.translate_type ~toplevel:false translator cat envtr sigma typ in
       let typ_ = Vars.replace_vars substfn typ_ in 
       let typ_ = FAux.clos_norm_flags CClosure.beta env typ_ in 
       let typ_ = Vars.substn_vars (List.length params + 1) invsubst typ_ in
       let envtyp_ =
-        Environ.push_rel (RelDecl.LocalAssum (Name (Nameops.add_suffix body.mind_typename "_f"),
+        Environ.push_rel (RelDecl.LocalAssum (Context.nameR (Nameops.add_suffix body.mind_typename "_f"),
 		                              it_mkProd_or_LetIn arity params))
           env
       in
@@ -251,11 +247,11 @@ let force_translate_inductive cat ind ids =
 
     (sigma, body_ :: bodies_)
   in
-  (** We proceed to the whole mutual block *)
+  (* We proceed to the whole mutual block *)
   let record = match mib.mind_record with
   | NotRecord -> None
   | FakeRecord -> Some None
-  | PrimRecord info -> Some (Some (Array.map pi1 info))
+  | PrimRecord info -> Some (Some (Array.map (fun (id,_,_,_) -> id) info))
   in
   let (sigma, params_) = FTranslate.translate_context translator cat env sigma mib.mind_params_ctxt in
   let (sigma, bodies_) = Array.fold_right (make_one_entry params_) mib.mind_packets (sigma, []) in
@@ -269,22 +265,17 @@ let force_translate_inductive cat ind ids =
     List.iter pr_constructor cs
   in
 (*   List.iter debug bodies_; *)
-  let make_param = function
-    | RelDecl.LocalAssum (na,t) -> (Name.get_id na, LocalAssumEntry t)
-    | RelDecl.LocalDef (na,b,_) -> (Name.get_id na, LocalDefEntry b)
-  in
-  let params_ = List.map make_param params_ in
   let uctx =
     match mib.mind_universes with
-    | Monomorphic_ind _ -> Monomorphic_ind_entry (Evd.universe_context_set sigma)
-    | Polymorphic_ind _ -> (* TODO *) Polymorphic_ind_entry (Evd.to_universe_context sigma)
-    | Cumulative_ind cu -> (* TODO *) assert false in
+    | Monomorphic _ -> Monomorphic_entry (Evd.universe_context_set sigma)
+    | Polymorphic _ -> Evd.univ_entry ~poly:true sigma in
   let mib_ = {
     mind_entry_record = record;
     mind_entry_finite = mib.mind_finite;
     mind_entry_params = params_;
     mind_entry_inds = bodies_;
     mind_entry_universes = uctx;
+    mind_entry_variance = mib.mind_variance;
     mind_entry_private = mib.mind_private;
   } in
   let (_, kn), _ = Declare.declare_mind mib_ in
@@ -298,8 +289,8 @@ let force_translate_inductive cat ind ids =
 
 let force_translate (obj, hom) gr ids =
   let gr = Nametab.global gr in
-  let obj = UnivGen.constr_of_global (Nametab.global obj) in
-  let hom = UnivGen.constr_of_global (Nametab.global hom) in
+  let obj = UnivGen.constr_of_monomorphic_global (Nametab.global obj) in
+  let hom = UnivGen.constr_of_monomorphic_global (Nametab.global hom) in
   let cat = {
     FTranslate.cat_obj = obj;
     FTranslate.cat_hom = hom;
@@ -320,8 +311,8 @@ let force_translate (obj, hom) gr ids =
 
 let force_implement (obj, hom) id typ idopt =
   let env = Global.env () in
-  let obj = UnivGen.constr_of_global (Nametab.global obj) in
-  let hom = UnivGen.constr_of_global (Nametab.global hom) in
+  let obj = UnivGen.constr_of_monomorphic_global (Nametab.global obj) in
+  let hom = UnivGen.constr_of_monomorphic_global (Nametab.global hom) in
   let cat = {
     FTranslate.cat_obj = obj;
     FTranslate.cat_hom = hom;
@@ -337,19 +328,18 @@ let force_implement (obj, hom) id typ idopt =
   let typ = EConstr.to_constr sigma typ in
   let (sigma, typ_) = FTranslate.translate_type !translator cat env sigma typ in
   let (sigma, _) = Typing.type_of env sigma (EConstr.of_constr typ_) in
-  let hook _ dst =
-    (** Declare the original term as an axiom *)
+  let hook _ _ _ dst =
+    (* Declare the original term as an axiom *)
     let uctx = Evd.universe_context_set sigma in
-    let param = (None, (typ, Entries.Monomorphic_const_entry uctx), None) in
+    let param = (None, (typ, Entries.Monomorphic_entry uctx), None) in
     let cb = Entries.ParameterEntry param in
     let cst = Declare.declare_constant id (cb, IsDefinition Definition) in
-    (** Attach the axiom to the forcing implementation *)
+    (* Attach the axiom to the forcing implementation *)
     Lib.add_anonymous_leaf (in_translator [ConstRef cst, dst])
   in
-  let hook ctx = Lemmas.mk_hook hook in
+  let hook = Lemmas.mk_hook hook in
   let sigma, _ = Typing.type_of env sigma (EConstr.of_constr typ_) in
-  let () = Lemmas.start_proof_univs id_ kind sigma (EConstr.of_constr typ_) hook in
-  ()
+  Lemmas.start_proof ~ontop:None id_ kind sigma (EConstr.of_constr typ_) ~hook
 
 (** Error handling *)
 

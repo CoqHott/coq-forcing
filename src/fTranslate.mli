@@ -1,4 +1,4 @@
-open Globnames
+open Names
 
 type category = {
   cat_obj : Constr.t;
@@ -7,9 +7,9 @@ type category = {
   (** Morphisms. Must be a closed term of type [cat_obj -> cat_obj -> Type]. *)
 }
 
-exception MissingGlobal of Names.GlobRef.t
+exception MissingGlobal of GlobRef.t
 
-type translator = Names.GlobRef.t Refmap.t
+type translator = GlobRef.t GlobRef.Map.t
 
 val hom : category -> Constr.constr -> Constr.constr -> Constr.types
 
