@@ -1,5 +1,6 @@
 open Names
 open Term
+open Constr
 open Declarations
 open Environ
 open Globnames
@@ -24,7 +25,7 @@ let knt_name = Name (Id.of_string "k")
 let hom cat a b =
   let lft = mkApp (cat.cat_hom, [| Vars.lift 1 b; mkRel 1 |]) in
   let rgt = mkApp (cat.cat_hom, [| Vars.lift 2 a; mkRel 2 |]) in
-  let arr = mkArrow lft rgt in
+  let arr = Term.mkArrow lft rgt in
   mkProd (obj_name, cat.cat_obj, arr)
 
 let refl cat a =
@@ -158,7 +159,7 @@ let apply_global env sigma gr u fctx =
 
 (** Forcing translation core *)
 
-let rec otranslate env fctx sigma c = match kind_of_term c with
+let rec otranslate env fctx sigma c = match kind c with
 | Rel n ->
   let ans = translate_var fctx n in
   (sigma, ans)
@@ -209,7 +210,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
 | App (t, args) ->
   let (sigma, t_) = otranslate env fctx sigma t in
   let fold sigma u = otranslate_boxed env fctx sigma u in
-  let (sigma, args_) = CArray.fold_map fold sigma args in
+  let (sigma, args_) = CArray.fold_left_map fold sigma args in
   let app = mkApp (t_, args_) in
   (sigma, app)
 | Var id ->
@@ -243,7 +244,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
        let decl = match o_ with None -> RelDecl.LocalAssum (na, u_) | Some o_ -> RelDecl.LocalDef (na, o_, u_) in
        (sigma, fctx), decl
      in
-     let (sigma, fctx), args = CList.fold_map fold (sigma, fctx) args in
+     let (sigma, fctx), args = CList.fold_left_map fold (sigma, fctx) args in
      let (sigma, self_) = otranslate_type env fctx sigma self in
      let fctx_ = add_variable fctx in
      let (sigma, r_) = otranslate_type env fctx_ sigma r_ in
@@ -261,7 +262,7 @@ let rec otranslate env fctx sigma c = match kind_of_term c with
    in
    let (sigma, r_) = fix_return_clause env fctx sigma r in
    let fold sigma u = otranslate env fctx sigma u in
-   let (sigma, p_) = CArray.fold_map fold sigma p in
+   let (sigma, p_) = CArray.fold_left_map fold sigma p in
    (sigma, mkCase (ci_, r_, c_, p_))
 | Fix f -> assert false
 | CoFix f -> assert false
@@ -273,7 +274,7 @@ and otranslate_ind env fctx sigma ind u args =
   let ind_ = get_inductive fctx ind in
   let (_, oib) = Inductive.lookup_mind_specif env ind_ in
   let fold sigma u = otranslate_boxed env fctx sigma u in
-  let (sigma, args_) = CArray.fold_map fold sigma args in
+  let (sigma, args_) = CArray.fold_left_map fold sigma args in
   (** First parameter is the toplevel forcing condition *)
   let _, paramtyp = CList.sep_last oib.mind_arity_ctxt in
   let nparams = List.length paramtyp in

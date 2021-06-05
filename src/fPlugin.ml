@@ -2,7 +2,9 @@ open CErrors
 open Pp
 open Util
 open Names
+open Nameops
 open Term
+open Constr
 open Decl_kinds
 open Libobject
 open Globnames
@@ -83,20 +85,19 @@ let force_translate_constant cat cst ids =
   | Some _ -> user_err (Pp.str "Not the right number of provided names")
   in
   (** Translate the type *)
-  let typ = Universes.unsafe_type_of_global (ConstRef cst) in
   let env = Global.env () in
   let sigma = Evd.from_env env in
+  let typ, _uctx = Global.type_of_global_in_context env (ConstRef cst) in
   let (sigma, typ) = FTranslate.translate_type !translator cat env sigma typ in
   let sigma, _ = Typing.type_of env sigma (EConstr.of_constr typ) in
-  let _uctx = Evd.evar_universe_context sigma in
   (** Define the term by tactic *)
-  let body = Option.get (Global.body_of_constant cst) in
+  let body, _ = Option.get (Global.body_of_constant cst) in
   let (sigma, body) = FTranslate.translate !translator cat env sigma body in
-(*   msg_info (Termops.print_constr body); *)
+(*  Pp.pp_with Format.err_formatter (Printer.pr_constr_env env sigma body);*)
   let evdref = ref sigma in
   let () = Typing.e_check env evdref (EConstr.of_constr body) (EConstr.of_constr typ) in
   let sigma = !evdref in
-  let (_, uctx) = Evd.universe_context sigma in
+  let uctx = Evd.const_univ_entry ~poly:false sigma in
   let ce = Declare.definition_entry ~types:typ ~univs:uctx body in
   let cd = Entries.DefinitionEntry ce in
   let decl = (cd, IsProof Lemma) in
@@ -105,20 +106,20 @@ let force_translate_constant cat cst ids =
 
 let eta_reduce c =
   let rec aux c =
-    match kind_of_term c with
+    match kind c with
     | Lambda (n, t, b) ->
        let rec eta b =
-	 match kind_of_term b with
+	 match kind b with
 	 | App (f, args) ->
 	    if isRelN 1 (Array.last args) then
 	      let args', _ = Array.chop (Array.length args - 1) args in
 	      if Array.for_all (Vars.noccurn 1) args' then Vars.subst1 mkProp (mkApp (f, args'))
-	      else let b' = aux b in if Term.eq_constr b b' then c else eta b'
-	    else let b' = aux b in if Term.eq_constr b b' then c else eta b'
+	      else let b' = aux b in if Constr.equal b b' then c else eta b'
+	    else let b' = aux b in if Constr.equal b b' then c else eta b'
 	 | _ -> let b' = aux b in
-	    if Term.eq_constr b' b then c else eta b'
+	    if Constr.equal b' b then c else eta b'
        in eta b
-    | _ -> map_constr aux c
+    | _ -> Constr.map aux c
   in aux c
 
 let get_mind_globrefs mind =
@@ -264,24 +265,23 @@ let force_translate_inductive cat ind ids =
   let (sigma, bodies_) = Array.fold_right (make_one_entry params_) mib.mind_packets (sigma, []) in
   let _debug b =
     let open Feedback in
-    msg_info (Nameops.pr_id b.mind_entry_typename ++ str " : " ++ Printer.pr_constr (it_mkProd_or_LetIn b.mind_entry_arity params_));
+    msg_info (Names.Id.print b.mind_entry_typename ++ str " : " ++ Printer.pr_constr_env env sigma (it_mkProd_or_LetIn b.mind_entry_arity params_));
     let cs = List.combine b.mind_entry_consnames b.mind_entry_lc in
     let pr_constructor (id, tpe) =
-      msg_info (Nameops.pr_id id ++ str " : " ++ Printer.pr_constr tpe)
+      msg_info (Names.Id.print id ++ str " : " ++ Printer.pr_constr_env env sigma tpe)
     in
     List.iter pr_constructor cs
   in
 (*   List.iter debug bodies_; *)
   let make_param = function
-    | RelDecl.LocalAssum (na,t) -> (Nameops.out_name na, LocalAssumEntry t)
-    | RelDecl.LocalDef (na,b,_) -> (Nameops.out_name na, LocalDefEntry b)
+    | RelDecl.LocalAssum (na,t) -> (Name.get_id na, LocalAssumEntry t)
+    | RelDecl.LocalDef (na,b,_) -> (Name.get_id na, LocalDefEntry b)
   in
   let params_ = List.map make_param params_ in
   let uctx =
-    let (_,uctx) = Evd.universe_context sigma in
     match mib.mind_universes with
-    | Monomorphic_ind _ -> Monomorphic_ind_entry uctx
-    | Polymorphic_ind _ -> (* TODO *) Polymorphic_ind_entry uctx
+    | Monomorphic_ind _ -> Monomorphic_ind_entry (Evd.universe_context_set sigma)
+    | Polymorphic_ind _ -> (* TODO *) Polymorphic_ind_entry (Evd.to_universe_context sigma)
     | Cumulative_ind cu -> (* TODO *) assert false in
   let mib_ = {
     mind_entry_record = record;
@@ -338,11 +338,13 @@ let force_implement (obj, hom) id typ idopt =
   let sigma = Evd.from_env env in
   let (typ, uctx) = Constrintern.interp_type env sigma typ in
   let sigma = Evd.from_ctx uctx in
+  let typ = EConstr.to_constr sigma typ in
   let (sigma, typ_) = FTranslate.translate_type !translator cat env sigma typ in
   let (sigma, _) = Typing.type_of env sigma (EConstr.of_constr typ_) in
   let hook _ dst =
     (** Declare the original term as an axiom *)
-    let param = (None, false, (typ, Evd.evar_context_universe_context uctx), None) in
+    let uctx = Evd.universe_context_set sigma in
+    let param = (None, (typ, Entries.Monomorphic_const_entry uctx), None) in
     let cb = Entries.ParameterEntry param in
     let cst = Declare.declare_constant id (cb, IsDefinition Definition) in
     (** Attach the axiom to the forcing implementation *)
