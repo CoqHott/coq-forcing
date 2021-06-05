@@ -3,7 +3,6 @@ open Term
 open Constr
 open Declarations
 open Environ
-open Globnames
 
 module RelDecl = Context.Rel.Declaration
 
@@ -131,13 +130,13 @@ let translate_var fctx n =
   mkApp (mkRel m, [| p; f |])
 
 let get_inductive fctx ind =
-  let gr = IndRef ind in
+  let gr = GlobRef.IndRef ind in
   let gr_ =
     try GlobRef.Map.find gr fctx.translator
     with Not_found -> raise (MissingGlobal gr)
   in
   match gr_ with
-  | IndRef ind_ -> ind_
+  | GlobRef.IndRef ind_ -> ind_
   | _ -> assert false
 
 let apply_global env sigma gr u fctx =
@@ -150,7 +149,7 @@ let apply_global env sigma gr u fctx =
   let c = EConstr.to_constr sigma c in
   let last = last_condition fctx in
   match gr with
-  | IndRef _ -> assert false
+  | GlobRef.IndRef _ -> assert false
   | _ -> (sigma, mkApp (c, [| mkRel last |]))
 
 (** Forcing translation core *)
@@ -210,13 +209,13 @@ let rec otranslate env fctx sigma c = match kind c with
   let app = mkApp (t_, args_) in
   (sigma, app)
 | Var id ->
-  apply_global env sigma (VarRef id) Univ.Instance.empty fctx
+  apply_global env sigma (GlobRef.VarRef id) Univ.Instance.empty fctx
 | Const (p, u) ->
-  apply_global env sigma (ConstRef p) u fctx
+  apply_global env sigma (GlobRef.ConstRef p) u fctx
 | Ind (ind, u) ->
   otranslate_ind env fctx sigma ind u [||]
 | Construct (c, u) ->
-  apply_global env sigma (ConstructRef c) u fctx
+  apply_global env sigma (GlobRef.ConstructRef c) u fctx
 | Case (ci, r, c, p) ->
    let ind_ = get_inductive fctx ci.ci_ind in
    let ci_ = Inductiveops.make_case_info env ind_ Sorts.Relevant ci.ci_pp_info.style in
@@ -266,6 +265,7 @@ let rec otranslate env fctx sigma c = match kind c with
 | Meta _ -> assert false
 | Evar _ -> assert false
 | Int _ -> assert false
+| Float _ -> assert false
 
 and otranslate_ind env fctx sigma ind u args =
   let ind_ = get_inductive fctx ind in

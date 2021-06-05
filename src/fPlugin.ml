@@ -2,11 +2,10 @@ open CErrors
 open Pp
 open Util
 open Names
+open Decls
 open Term
 open Constr
-open Decl_kinds
 open Libobject
-open Globnames
 open Proofview.Notations
 
 module RelDecl = Context.Rel.Declaration
@@ -76,27 +75,27 @@ let force_solve cat c =
 
 let force_translate_constant cat cst ids =
   let id = match ids with
-  | None -> translate_name (Nametab.basename_of_global (ConstRef cst))
+  | None -> translate_name (Nametab.basename_of_global (GlobRef.ConstRef cst))
   | Some [id] -> id
   | Some _ -> user_err (Pp.str "Not the right number of provided names")
   in
   (* Translate the type *)
   let env = Global.env () in
   let sigma = Evd.from_env env in
-  let typ, _uctx = Typeops.type_of_global_in_context env (ConstRef cst) in
+  let typ, _uctx = Typeops.type_of_global_in_context env (GlobRef.ConstRef cst) in
   let (sigma, typ) = FTranslate.translate_type !translator cat env sigma typ in
   let sigma, _ = Typing.type_of env sigma (EConstr.of_constr typ) in
   (* Define the term by tactic *)
-  let body, _ = Option.get (Global.body_of_constant cst) in
+  let body, _, _ = Option.get (Global.body_of_constant Library.indirect_accessor cst) in
   let (sigma, body) = FTranslate.translate !translator cat env sigma body in
 (*  Pp.pp_with Format.err_formatter (Printer.pr_constr_env env sigma body);*)
   let sigma = Typing.check env sigma (EConstr.of_constr body) (EConstr.of_constr typ) in
   let uctx = Evd.univ_entry ~poly:false sigma in
   let ce = Declare.definition_entry ~types:typ ~univs:uctx body in
-  let cd = Entries.DefinitionEntry ce in
-  let decl = (cd, IsProof Lemma) in
-  let cst_ = Declare.declare_constant id decl in
-  [ConstRef cst, ConstRef cst_]
+  let cd = Declare.DefinitionEntry ce in
+  let kind = IsProof Lemma in
+  let cst_ = Declare.declare_constant ~name:id ~kind cd in
+  [GlobRef.ConstRef cst, GlobRef.ConstRef cst_]
 
 let eta_reduce c =
   let rec aux c =
@@ -120,8 +119,8 @@ let get_mind_globrefs mind =
   let open Declarations in
   let mib = Global.lookup_mind mind in
   let map i body =
-    let ind = IndRef (mind, i) in
-    let map_cons j _ = ConstructRef ((mind, i), j + 1) in
+    let ind = GlobRef.IndRef (mind, i) in
+    let map_cons j _ = GlobRef.ConstructRef ((mind, i), j + 1) in
     ind :: List.mapi map_cons (Array.to_list body.mind_consnames)
   in
   let l = List.mapi map (Array.to_list mib.mind_packets) in
@@ -144,7 +143,7 @@ let force_translate_inductive cat ind ids =
       mib.mind_packets
   in
   let invsubst = List.map NamedDecl.get_id substind in
-  let translator = add_translator !translator (List.map (fun id -> VarRef id, VarRef id) invsubst) in
+  let translator = add_translator !translator (List.map (fun id -> GlobRef.VarRef id, GlobRef.VarRef id) invsubst) in
   (* À chaque inductif I on associe une fonction λp.λparams.λindices.λ(qα), 
      (mkVar I) p params indices *)
   let sigma = Evd.from_env env in
@@ -175,13 +174,11 @@ let force_translate_inductive cat ind ids =
     Array.fold_left fold (sigma, []) mib.mind_packets
   in
   let make_one_entry params body (sigma, bodies_) =
-    let template = match body.mind_arity with
-    | RegularArity _ -> false
-    | TemplateArity _ -> true
-    in
+    (* For template polymorphism, one would need to maintain a substitution of universes *)
+    let template = false in
     (* Heuristic for the return type. Can we do better? *)
     let (sigma, s) =
-      if List.mem Sorts.InType body.mind_kelim then
+      if Sorts.family_leq Sorts.InType body.mind_kelim then
         let sigma, s = Evarutil.new_Type sigma in
         (sigma, EConstr.to_constr sigma s)
       else
@@ -278,11 +275,10 @@ let force_translate_inductive cat ind ids =
     mind_entry_variance = mib.mind_variance;
     mind_entry_private = mib.mind_private;
   } in
-  let (_, kn), _ = Declare.declare_mind mib_ in
-  let mib_ = Global.mind_of_delta_kn kn in
+  let mib_ = DeclareInd.declare_mutual_inductive_with_eliminations mib_ UnivNames.empty_binders [] in
   let map_data gr = match gr with
-  | IndRef (mib, i) -> (gr, IndRef (mib_, i))
-  | ConstructRef ((mib, i), j) -> (gr, ConstructRef ((mib_, i), j))
+  | GlobRef.IndRef (mib, i) -> (gr, GlobRef.IndRef (mib_, i))
+  | GlobRef.ConstructRef ((mib, i), j) -> (gr, GlobRef.ConstructRef ((mib_, i), j))
   | _ -> assert false
   in
   List.map map_data (get_mind_globrefs (fst ind))
@@ -296,8 +292,8 @@ let force_translate (obj, hom) gr ids =
     FTranslate.cat_hom = hom;
   } in
   let ans = match gr with
-  | ConstRef cst -> force_translate_constant cat cst ids
-  | IndRef ind -> force_translate_inductive cat ind ids
+  | GlobRef.ConstRef cst -> force_translate_constant cat cst ids
+  | GlobRef.IndRef ind -> force_translate_inductive cat ind ids
   | _ -> user_err (Pp.str "Translation not handled.")
   in
   let () = Lib.add_anonymous_leaf (in_translator ans) in
@@ -321,25 +317,25 @@ let force_implement (obj, hom) id typ idopt =
   | None -> translate_name id
   | Some id -> id
   in
-  let kind = Global, false, DefinitionBody Definition in
+  let kind = IsDefinition Definition in
+  let scope = DeclareDef.Global Declare.ImportDefaultBehavior in 
   let sigma = Evd.from_env env in
   let (typ, uctx) = Constrintern.interp_type env sigma typ in
   let sigma = Evd.from_ctx uctx in
   let typ = EConstr.to_constr sigma typ in
   let (sigma, typ_) = FTranslate.translate_type !translator cat env sigma typ in
   let (sigma, _) = Typing.type_of env sigma (EConstr.of_constr typ_) in
-  let hook _ _ _ dst =
+  let hook = DeclareDef.Hook.(make (function S.{uctx;dref} ->
     (* Declare the original term as an axiom *)
-    let uctx = Evd.universe_context_set sigma in
-    let param = (None, (typ, Entries.Monomorphic_entry uctx), None) in
-    let cb = Entries.ParameterEntry param in
-    let cst = Declare.declare_constant id (cb, IsDefinition Definition) in
+    let param = (None, (typ, Entries.Monomorphic_entry (UState.context_set uctx)), None) in
+    let cb = Declare.ParameterEntry param in
+    let cst = Declare.declare_constant ~name:id ~kind:(IsDefinition Definition) cb in
     (* Attach the axiom to the forcing implementation *)
-    Lib.add_anonymous_leaf (in_translator [ConstRef cst, dst])
+    Lib.add_anonymous_leaf (in_translator [GlobRef.ConstRef cst, dref])))
   in
-  let hook = Lemmas.mk_hook hook in
   let sigma, _ = Typing.type_of env sigma (EConstr.of_constr typ_) in
-  Lemmas.start_proof ~ontop:None id_ kind sigma (EConstr.of_constr typ_) ~hook
+  let info = Lemmas.Info.make ~hook ~kind ~scope () in
+  Lemmas.start_lemma ~name:id_ ~poly:false ~info sigma (EConstr.of_constr typ_)
 
 (** Error handling *)
 

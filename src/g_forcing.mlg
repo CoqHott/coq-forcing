@@ -22,13 +22,13 @@ END
 
 {
 
-let classify_impl _ = Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]), VtLater)
+let classify_impl _ = Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]))
 
 }
 
-VERNAC COMMAND EXTEND ForcingImplementation CLASSIFIED BY { classify_impl }
-| ![ proof ] [ "Forcing" "Definition" ident(id) ":" lconstr(typ) "using" global(obj) global(hom) ] ->
-  { fun ~pstate -> Some (FPlugin.force_implement (obj, hom) id typ None) }
-| ![ proof ] [ "Forcing" "Definition" ident(id) ":" lconstr(typ) "as" ident(id') "using" global(obj) global(hom) ] ->
-  { fun ~pstate -> Some (FPlugin.force_implement (obj, hom) id typ (Some id')) }
+VERNAC COMMAND EXTEND ForcingImplementation CLASSIFIED BY { classify_impl } STATE open_proof
+| [ "Forcing" "Definition" ident(id) ":" lconstr(typ) "using" global(obj) global(hom) ] ->
+  { FPlugin.force_implement (obj, hom) id typ None }
+| [ "Forcing" "Definition" ident(id) ":" lconstr(typ) "as" ident(id') "using" global(obj) global(hom) ] ->
+  { FPlugin.force_implement (obj, hom) id typ (Some id') }
 END
