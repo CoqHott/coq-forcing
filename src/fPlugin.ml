@@ -174,13 +174,14 @@ let force_translate_inductive cat ind ids =
     Array.fold_left fold (sigma, []) mib.mind_packets
   in
   let make_one_entry params body (sigma, bodies_) =
-    (* Heuristic for the return type. Can we do better? *)
     let (sigma, s) =
-      if Sorts.family_leq Sorts.InType body.mind_kelim then
-        let sigma, s = Evarutil.new_Type sigma in
-        (sigma, EConstr.to_constr sigma s)
-      else
-        (sigma, mkProp)
+      match body.mind_arity with
+      | RegularArity {mind_sort=s} when Sorts.(is_prop s || is_sprop s) ->
+         (* Impredicative sorts are stable by quantification over forcing conditions *)
+         (sigma, mkSort s)
+      | _ ->
+         let sigma, s = Evarutil.new_Type sigma in
+         (sigma, EConstr.to_constr sigma s)
     in
     let (sigma, arity) =
       (* On obtient l'arité de l'inductif en traduisant le type de chaque indice
