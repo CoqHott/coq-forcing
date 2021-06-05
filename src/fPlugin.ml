@@ -316,7 +316,7 @@ let force_implement (obj, hom) id typ idopt =
   | Some id -> id
   in
   let kind = IsDefinition Definition in
-  let scope = Declare.Global Declare.ImportDefaultBehavior in 
+  let scope = Locality.(Global ImportDefaultBehavior) in 
   let sigma = Evd.from_env env in
   let (typ, uctx) = Constrintern.interp_type env sigma typ in
   let sigma = Evd.from_ctx uctx in
@@ -332,8 +332,9 @@ let force_implement (obj, hom) id typ idopt =
     Lib.add_anonymous_leaf (in_translator [GlobRef.ConstRef cst, dref])))
   in
   let sigma, _ = Typing.type_of env sigma (EConstr.of_constr typ_) in
-  let info = Lemmas.Info.make ~hook ~kind ~scope () in
-  Lemmas.start_lemma ~name:id_ ~poly:false ~info sigma (EConstr.of_constr typ_)
+  let info = Declare.Info.make ~hook ~kind ~scope ~poly:false () in
+  let cinfo = Declare.CInfo.make ~name:id_ ~typ:(EConstr.of_constr typ_) () in
+  Declare.Proof.start ~cinfo ~info sigma 
 
 (** Error handling *)
 

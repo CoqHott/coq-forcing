@@ -216,7 +216,7 @@ let rec otranslate env fctx sigma c = match kind c with
   otranslate_ind env fctx sigma ind u [||]
 | Construct (c, u) ->
   apply_global env sigma (GlobRef.ConstructRef c) u fctx
-| Case (ci, r, c, p) ->
+| Case (ci, r, iv, c, p) ->
    let ind_ = get_inductive fctx ci.ci_ind in
    let ci_ = Inductiveops.make_case_info env ind_ Sorts.Relevant ci.ci_pp_info.style in
    let (sigma, c_) = otranslate env fctx sigma c in
@@ -258,7 +258,9 @@ let rec otranslate env fctx sigma c = match kind c with
    let (sigma, r_) = fix_return_clause env fctx sigma r in
    let fold sigma u = otranslate env fctx sigma u in
    let (sigma, p_) = CArray.fold_left_map fold sigma p in
-   (sigma, mkCase (ci_, r_, c_, p_))
+   (* Do not support "UIP" *)
+   let iv_ = NoInvert in
+   (sigma, mkCase (ci_, r_, iv_, c_, p_))
 | Fix f -> assert false
 | CoFix f -> assert false
 | Proj (p, c) -> assert false
@@ -266,6 +268,7 @@ let rec otranslate env fctx sigma c = match kind c with
 | Evar _ -> assert false
 | Int _ -> assert false
 | Float _ -> assert false
+| Array _ -> assert false
 
 and otranslate_ind env fctx sigma ind u args =
   let ind_ = get_inductive fctx ind in
